@@ -1,0 +1,66 @@
+const express  = require('express');
+const mongoose = require('mongoose');
+const cors     = require('cors');
+const path     = require('path');
+require('dotenv').config();
+
+const app = express();
+
+/* ── CORS ──────────────────────────────────────────────────── */
+const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000').split(',');
+allowedOrigins.push('http://localhost:3000', 'http://localhost:3001');
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.some(o => origin.startsWith(o))) return cb(null, true);
+    cb(new Error(`CORS: origin "${origin}" not allowed`));
+  },
+  credentials: true,
+}));
+
+/* ── Raw body for Razorpay webhook (must be before json parser) ── */
+app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
+
+/* ── Body parsers ─────────────────────────────────────────── */
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+/* ── Static uploads ───────────────────────────────────────── */
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+/* ── Routes ───────────────────────────────────────────────── */
+app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/visas',        require('./routes/visas'));
+app.use('/api/applications', require('./routes/applications'));
+app.use('/api/agents',       require('./routes/agents'));
+app.use('/api/admin',        require('./routes/admin'));
+app.use('/api/payments',     require('./routes/payments'));
+app.use('/api/pdf',          require('./routes/pdf'));
+app.use('/api/settings',     require('./routes/settings'));
+
+/* ── Health ───────────────────────────────────────────────── */
+app.get('/api/health', (_, res) =>
+  res.json({ status: 'ok', brand: 'Visayatri', version: '3.0.0', ts: new Date().toISOString() })
+);
+
+/* ── 404 ──────────────────────────────────────────────────── */
+app.use((req, res) =>
+  res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.path}` })
+);
+
+/* ── Global error handler ─────────────────────────────────── */
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[ERROR]', err.message);
+  if (err.message?.startsWith('CORS')) return res.status(403).json({ success: false, message: err.message });
+  res.status(err.status || 500).json({ success: false, message: err.message || 'Internal server error' });
+});
+
+/* ── DB + Start ───────────────────────────────────────────── */
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`🚀 Visayatri API v3 running → http://localhost:${PORT}`));
+  })
+  .catch(err => { console.error('❌ DB error:', err.message); process.exit(1); });

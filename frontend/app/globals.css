@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+img, svg { display: block; max-width: 100%; }
+
+/* Hide scrollbar utility */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────────────── */
+  .btn-primary {
+    @apply bg-cta text-white px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-orange-600 active:scale-95
+           transition-all duration-150
+           inline-flex items-center justify-center gap-2
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cta/50
+           disabled:opacity-60 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-secondary {
+    @apply bg-primary text-white px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-blue-900 active:scale-95
+           transition-all duration-150
+           inline-flex items-center justify-center gap-2
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40;
+  }
+  .btn-outline {
+    @apply border-2 border-primary text-primary px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-primary hover:text-white active:scale-95
+           transition-all duration-150
+           inline-flex items-center justify-center gap-2;
+  }
+
+  /* ── Cards ───────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-5
+           hover:shadow-md transition-shadow duration-200;
+  }
+
+  /* ── Form inputs ─────────────────────────────────────── */
+  .input-field {
+    @apply w-full border border-gray-200 rounded-xl px-4 py-2.5
+           text-sm text-gray-900 bg-white
+           focus:outline-none focus:ring-2 focus:ring-secondary/30 focus:border-secondary
+           placeholder:text-gray-400
+           transition-colors duration-150;
+  }
+
+  /* ── Badges ──────────────────────────────────────────── */
+  .badge {
+    @apply text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1;
+  }
+
+  /* ── Touch-friendly tap target ───────────────────────── */
+  .tap-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+}
+
+/* ── Mobile bottom safe area ─────────────────────────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* ── Smooth page transitions ─────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.35s ease both;
+}
+
+/* ── Shimmer skeleton ─────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
