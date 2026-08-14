@@ -29,6 +29,20 @@ const applicationSchema = new mongoose.Schema({
   returnDate:      { type: Date },
   purposeOfVisit:  { type: String, default: 'Tourism' },
 
+  // ── Extra applicant details (employment, sponsor, emergency, etc.) ─
+  employmentStatus:       { type: String, default: '' },
+  companyName:             { type: String, default: '' },
+  jobTitle:                { type: String, default: '' },
+  monthlyIncome:            { type: Number, default: 0 },
+  sponsorName:              { type: String, default: '' },
+  sponsorContact:           { type: String, default: '' },
+  hotelName:                { type: String, default: '' },
+  maritalStatus:            { type: String, default: '' },
+  emergencyContactName:     { type: String, default: '' },
+  emergencyContactPhone:    { type: String, default: '' },
+  previousVisaRejection:    { type: String, default: 'No' },
+  extra:                    { type: mongoose.Schema.Types.Mixed, default: {} }, // catch-all for remaining apply-form fields
+
   // ── Selected plan (snapshot of price at time of apply) ─
   planLabel:       { type: String },
   pricePaid:       { type: Number, default: 0 },  // what this applicant paid
@@ -40,7 +54,7 @@ const applicationSchema = new mongoose.Schema({
   // ── Status ───────────────────────────────────────────
   status: {
     type: String,
-    enum: ['pending','documents_received','in_review','processing','approved','rejected','delivered'],
+    enum: ['pending','documents_received','in_review','processing','sent_to_immigration','approved','rejected','delivered'],
     default: 'pending',
   },
   statusHistory: [{
@@ -53,6 +67,15 @@ const applicationSchema = new mongoose.Schema({
 
   // ── Documents ─────────────────────────────────────────
   documents: [documentSchema],
+
+  // ── Additional documents admin has asked the applicant for ─
+  docsRequested: [{
+    items:       [{ type: String }],           // e.g. ['Bank statement', 'Hotel booking']
+    note:        { type: String, default: '' },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requestedAt: { type: Date, default: Date.now },
+    fulfilled:   { type: Boolean, default: false },
+  }],
 
   // ── Payment ───────────────────────────────────────────
   paymentMethod:  { type: String, enum: ['razorpay','wallet','whatsapp','free'], default: 'whatsapp' },

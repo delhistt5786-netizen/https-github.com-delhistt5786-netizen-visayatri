@@ -30,6 +30,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* ── Routes ───────────────────────────────────────────────── */
 app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/countries',    require('./routes/countries'));
 app.use('/api/visas',        require('./routes/visas'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/agents',       require('./routes/agents'));

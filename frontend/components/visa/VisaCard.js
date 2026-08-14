@@ -1,102 +1,112 @@
 'use client';
 import Link from 'next/link';
-import { Clock, CheckCircle, MessageCircle, TrendingUp } from 'lucide-react';
+import { Clock, CheckCircle2, MessageCircle, TrendingUp, ArrowRight } from 'lucide-react';
 import { waApply } from '../../lib/whatsapp';
 import { getUser } from '../../lib/auth';
 
 export default function VisaCard({ visa }) {
-  const user       = getUser();
-  const isAgent    = user?.role === 'agent';
+  const user = getUser();
+  const isAgent = user?.role === 'agent';
+  const plans = visa.plans || [];
+  const cheapest = plans
+    .filter((p) => !p.isContactUs && (p.price || p.publicPrice) > 0)
+    .sort((a, b) => (a.price || a.publicPrice) - (b.price || b.publicPrice))[0];
 
-  // plans array is already role-filtered by backend
-  const plans      = visa.plans || [];
-  const cheapest   = plans.filter(p => !p.isContactUs && (p.price || p.publicPrice) > 0)
-                          .sort((a, b) => (a.price || a.publicPrice) - (b.price || b.publicPrice))[0];
-
-  const displayPrice = cheapest
-    ? (isAgent ? cheapest.price : cheapest.price || cheapest.publicPrice)
-    : null;
-
+  const displayPrice = cheapest ? (isAgent ? cheapest.price : cheapest.price || cheapest.publicPrice) : null;
   const showProfit = isAgent && cheapest?.profit > 0;
 
   return (
-    <div className="card hover:-translate-y-1 flex flex-col">
-      {/* Top */}
-      <div className="flex items-start justify-between mb-3">
+    <div className="soft-card group flex flex-col overflow-hidden">
+      {/* Header with flag and badge */}
+      <div className="mb-4 flex items-start justify-between">
         <div className="flex items-center gap-3">
-          <span className="text-3xl leading-none">{visa.flag}</span>
+          <div className="rounded-2xl bg-orange-100 p-2 text-3xl">{visa.flag}</div>
           <div>
-            <h3 className="font-bold text-gray-900 text-base leading-tight">{visa.country}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{visa.visaType || 'E-Visa'}</p>
+            <h3 className="text-lg font-black text-slate-900">{visa.country}</h3>
+            <p className="text-xs font-medium text-slate-500">{visa.visaType || 'E-Visa'}</p>
           </div>
         </div>
         {visa.isRiskFree && (
-          <span className="badge bg-emerald-100 text-emerald-700 flex items-center gap-1 whitespace-nowrap">
-            <CheckCircle className="w-3 h-3" /> Risk Free
-          </span>
+          <div className="whitespace-nowrap rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" /> Risk Free
+          </div>
         )}
       </div>
 
-      <div className="flex items-center gap-1 text-xs text-gray-400 mb-3">
-        <Clock className="w-3 h-3" /> {visa.processingTime}
+      {/* Processing time */}
+      <div className="mb-5 flex items-center gap-2 rounded-xl bg-orange-50 px-3 py-2">
+        <Clock className="h-4 w-4 text-orange-600" />
+        <span className="text-sm font-medium text-orange-900">{visa.processingTime}</span>
       </div>
 
-      {/* Plans */}
-      <div className="flex-1 space-y-1.5 mb-4">
-        {plans.slice(0, 3).map((p, i) => (
-          <div key={i} className="flex justify-between items-center text-sm bg-gray-50 rounded-lg px-3 py-1.5">
-            <span className="text-gray-600 text-xs">{p.label}</span>
-            <div className="text-right">
-              {p.isContactUs
-                ? <span className="text-gray-400 text-xs font-medium">Contact Us</span>
-                : (
-                  <div>
-                    <span className="font-bold text-primary text-sm">
+      {/* Price display */}
+      {displayPrice ? (
+        <div className="mb-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">From</p>
+          <p className="mt-1 text-3xl font-black text-slate-900">₹{displayPrice.toLocaleString('en-IN')}</p>
+        </div>
+      ) : null}
+
+      {/* Plan options */}
+      {plans.length > 0 && (
+        <div className="mb-5 flex-1">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">Available Plans</p>
+          <div className="space-y-2">
+            {plans.slice(0, 2).map((p, i) => (
+              <div key={i} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-slate-700">{p.label}</span>
+                  {p.isContactUs ? (
+                    <span className="text-xs font-semibold text-slate-500">Contact</span>
+                  ) : (
+                    <span className="text-sm font-bold text-orange-600">
                       ₹{(p.price || p.publicPrice || 0).toLocaleString('en-IN')}
                     </span>
-                    {isAgent && p.profit > 0 && (
-                      <span className="block text-xs text-emerald-600 font-medium">
-                        +₹{p.profit.toLocaleString('en-IN')} profit
-                      </span>
-                    )}
-                  </div>
-                )
-              }
-            </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {plans.length > 2 && (
+              <Link href={`/visa/${visa.slug}`}
+                className="block w-full rounded-lg border border-dashed border-slate-300 bg-white py-2 text-center text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:border-orange-300 hover:text-orange-600">
+                +{plans.length - 2} more options
+              </Link>
+            )}
           </div>
-        ))}
-        {plans.length > 3 && (
-          <p className="text-xs text-gray-400 pl-1">+{plans.length - 3} more plans</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Agent profit banner */}
       {showProfit && (
-        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 mb-3">
-          <TrendingUp className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-          <p className="text-xs text-emerald-700 font-semibold">
-            Earn up to ₹{cheapest.profit?.toLocaleString('en-IN')} per application
+        <div className="mb-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+          <TrendingUp className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <p className="text-xs font-bold text-emerald-700">
+            Earn ₹{cheapest.profit?.toLocaleString('en-IN')}/application
           </p>
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <Link href={`/visa/${visa.slug}`}
-          className="flex-1 text-center bg-primary text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-900 transition-colors">
-          Apply Now
+      {/* CTA Buttons */}
+      <div className="flex gap-3">
+        <Link
+          href={`/visa/${visa.slug}`}
+          className="flex-1 rounded-xl bg-gradient-to-br from-[#061f3b] to-[#0d3b66] px-4 py-2.5 text-center text-sm font-bold text-white transition-all hover:shadow-lg group-hover:-translate-y-0.5"
+        >
+          Apply now
         </Link>
         <a
           href={waApply({
             visaCountry: visa.country,
-            planLabel:   cheapest?.label,
-            userName:    user?.name,
-            email:       user?.email,
+            planLabel: cheapest?.label,
+            userName: user?.name,
+            email: user?.email,
           })}
-          target="_blank" rel="noopener noreferrer"
-          className="flex items-center justify-center gap-1.5 bg-green-500 text-white rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-green-600 transition-colors"
-          title="Apply via WhatsApp">
-          <MessageCircle className="w-4 h-4" />
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-xl border-2 border-green-500 bg-white px-3 py-2.5 text-green-500 transition-all hover:bg-green-50"
+          title="Apply via WhatsApp"
+        >
+          <MessageCircle className="h-4 w-4" />
         </a>
       </div>
     </div>

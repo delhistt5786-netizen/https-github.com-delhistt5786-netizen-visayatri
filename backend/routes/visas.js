@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const Visa   = require('../models/Visa');
-const { protect, authorize, optionalAuth } = require('../middleware/auth');
+const { optionalAuth } = require('../middleware/auth');
 
 // ── GET /api/visas ───────────────────────────────────────
 // Public; authenticated users get role-appropriate prices
@@ -31,29 +31,7 @@ router.get('/:slug', optionalAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
-// ── POST /api/visas — admin create ───────────────────────
-router.post('/', protect, authorize('admin'), async (req, res) => {
-  try {
-    const visa = await Visa.create(req.body);
-    res.status(201).json({ success: true, data: visa });
-  } catch (err) { res.status(400).json({ success: false, message: err.message }); }
-});
-
-// ── PUT /api/visas/:id — admin update ────────────────────
-router.put('/:id', protect, authorize('admin'), async (req, res) => {
-  try {
-    const visa = await Visa.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-    if (!visa) return res.status(404).json({ success: false, message: 'Visa not found.' });
-    res.json({ success: true, data: visa });
-  } catch (err) { res.status(400).json({ success: false, message: err.message }); }
-});
-
-// ── DELETE /api/visas/:id — admin soft-delete ────────────
-router.delete('/:id', protect, authorize('admin'), async (req, res) => {
-  try {
-    await Visa.findByIdAndUpdate(req.params.id, { isActive: false });
-    res.json({ success: true, message: 'Visa deactivated.' });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
-});
+// Admin visa CRUD lives in routes/admin.js (mounted at /api/admin/visas) —
+// this file only serves the public read endpoints above.
 
 module.exports = router;

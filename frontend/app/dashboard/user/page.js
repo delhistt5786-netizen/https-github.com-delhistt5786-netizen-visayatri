@@ -4,9 +4,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   FileText, Clock, CheckCircle, XCircle, Upload, Download,
-  MessageCircle, RefreshCw, Loader2, ChevronRight
+  MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff
 } from 'lucide-react';
-import { appAPI, pdfURL } from '../../../lib/api';
+import { appAPI, pdfURL, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import { waTrack } from '../../../lib/whatsapp';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -15,7 +15,7 @@ import EmptyState from '../../../components/ui/EmptyState';
 import ErrorBanner from '../../../components/ui/ErrorBanner';
 import toast from 'react-hot-toast';
 
-const STATUS_STEPS = ['pending','documents_received','in_review','processing','approved','delivered'];
+const STATUS_STEPS = ['pending','documents_received','in_review','processing','sent_to_immigration','approved','delivered'];
 
 export default function UserDashboard() {
   const router = useRouter();
@@ -27,11 +27,15 @@ export default function UserDashboard() {
   const [uploading,  setUploading]  = useState(null);
   const [expanded,   setExpanded]   = useState(null);
   const [error,      setError]      = useState('');
+  const [avatarUrl,  setAvatarUrl]  = useState(null);
 
   useEffect(() => {
     if (!user) { router.push('/auth/login'); return; }
     if (user.role !== 'user') { router.push(`/dashboard/${user.role}`); return; }
     load();
+    appAPI.getMyAvatar().then(res => {
+      if (res.data?.avatarUrl) setAvatarUrl(`${uploadsOrigin}${res.data.avatarUrl}`);
+    }).catch(() => {});
   }, []);
 
   const load = useCallback(async (silent = false) => {
@@ -74,50 +78,69 @@ export default function UserDashboard() {
   const stepIdx = (s) => STATUS_STEPS.indexOf(s);
 
   return (
-    <div className="pt-16 min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-primary">My Dashboard</h1>
-            <p className="text-gray-400 text-sm mt-1">Welcome back, {user?.name} 👋</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => load(true)} disabled={refreshing}
-              className="p-2 text-gray-400 hover:text-primary border border-gray-200 rounded-xl bg-white transition-colors tap-target">
-              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <Link href="/visa" className="btn-primary text-sm">+ Apply New Visa</Link>
+    <div className="pt-16 min-h-screen bg-gradient-to-b from-[#0a1f35] via-[#0d2d45] to-[#f8f9fa]">
+      {/* Hero Header */}
+      <div className="bg-gradient-to-br from-[#061f3b] via-[#0d3b66] to-[#0B3C5D] relative overflow-hidden border-b border-white/10">
+        <div className="absolute inset-0">
+          <div className="absolute top-10 right-10 w-96 h-96 bg-blue-500 rounded-full blur-3xl opacity-10"></div>
+          <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-[#FF7A00] rounded-full blur-3xl opacity-5"></div>
+        </div>
+        
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            <div className="flex items-center gap-4">
+              {avatarUrl && (
+                <img src={avatarUrl} alt={user?.name} className="w-14 h-14 rounded-full object-cover border-2 border-[#FF7A00] flex-shrink-0" />
+              )}
+              <div>
+                <h1 className="text-4xl sm:text-5xl font-black text-white mb-3">
+                  My Visa Applications
+                </h1>
+                <p className="text-white/80 text-lg">Welcome back, <span className="font-bold text-[#FF7A00]">{user?.name}</span> 👋 — Track your visa applications in real-time</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => load(true)} disabled={refreshing}
+                className="p-3 text-white/70 hover:text-[#FF7A00] border border-white/20 rounded-xl bg-white/10 backdrop-blur transition-all hover:border-[#FF7A00]/50 tap-target">
+                <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <Link href="/visa" className="px-6 py-3 rounded-xl font-bold bg-gradient-to-r from-[#FF7A00] to-orange-500 hover:from-orange-600 hover:to-orange-700 text-white transition-all shadow-lg">+ Apply Visa</Link>
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {error && <div className="mb-5"><ErrorBanner message={error} onDismiss={() => setError('')} /></div>}
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {/* Stats - Glassmorphic Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
           {[
-            [FileText,    'Total',    stats.total,    'bg-blue-50 text-blue-600'],
-            [Clock,       'Pending',  stats.pending,  'bg-amber-50 text-amber-600'],
-            [CheckCircle, 'Approved', stats.approved, 'bg-emerald-50 text-emerald-600'],
-            [XCircle,     'Rejected', stats.rejected, 'bg-red-50 text-red-500'],
-          ].map(([Icon, label, val, cls]) => (
-            <div key={label} className={`rounded-2xl p-4 ${cls.split(' ')[0]}`}>
-              <Icon className={`w-5 h-5 mb-1.5 ${cls.split(' ')[1]}`} />
-              <p className={`text-2xl font-extrabold ${cls.split(' ')[1]}`}>{val}</p>
-              <p className="text-xs text-gray-400 font-medium mt-0.5">{label}</p>
+            [FileText,    'Total Apps',  stats.total,    'text-blue-400', 'from-blue-500/20 to-blue-500/5'],
+            [Clock,       'Pending',     stats.pending,  'text-amber-400', 'from-amber-500/20 to-amber-500/5'],
+            [CheckCircle, 'Approved',    stats.approved, 'text-emerald-400', 'from-emerald-500/20 to-emerald-500/5'],
+            [XCircle,     'Rejected',    stats.rejected, 'text-red-400', 'from-red-500/20 to-red-500/5'],
+          ].map(([Icon, label, val, iconColor, bgGradient]) => (
+            <div key={label} className={`rounded-2xl p-5 bg-gradient-to-br ${bgGradient} border border-white/10 backdrop-blur-sm hover:border-white/20 transition-all`}>
+              <Icon className={`w-6 h-6 mb-2 ${iconColor}`} />
+              <p className="text-3xl font-black text-white">{val}</p>
+              <p className="text-xs text-white/60 font-semibold mt-1 uppercase tracking-wide">{label}</p>
             </div>
           ))}
         </div>
 
         {/* Applications */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-5 border-b border-gray-100">
-            <h2 className="font-bold text-primary">My Applications</h2>
+        <div className="bg-gradient-to-br from-white/5 to-white/10 rounded-3xl border border-white/20 backdrop-blur-xl overflow-hidden shadow-2xl">
+          <div className="px-6 py-6 border-b border-white/10 bg-gradient-to-r from-white/5 to-transparent">
+            <h2 className="font-black text-white text-xl flex items-center gap-3">
+              <FileText className="w-6 h-6 text-[#FF7A00]" />
+              My Applications
+            </h2>
           </div>
 
           {loading ? (
-            <div className="p-5 space-y-4">
+            <div className="p-6 space-y-4">
               {[0,1,2].map(i => <SkeletonCard key={i} />)}
             </div>
           ) : apps.length === 0 ? (
@@ -125,163 +148,143 @@ export default function UserDashboard() {
               subtitle="Browse visas and apply in minutes"
               actionHref="/visa" actionLabel="Browse Visas" />
           ) : (
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-white/5">
               {apps.map(app => {
                 const isExpanded = expanded === app._id;
-                const canUpload  = ['pending','documents_received'].includes(app.status);
+                const pendingDocRequests = (app.docsRequested || []).filter(r => !r.fulfilled);
+                const canUpload  = ['pending','documents_received'].includes(app.status) || pendingDocRequests.length > 0;
+                const visaDoc    = app.documents?.find(d => d.docType === 'visaDocument');
                 const currentStep = stepIdx(app.status);
 
                 return (
-                  <div key={app._id} className="animate-fade-in-up">
-                    {/* Main row */}
+                  <div key={app._id} className="animate-fade-in-up hover:bg-white/5 transition-colors">
+                    {/* Main Card */}
                     <div
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 cursor-pointer hover:bg-gray-50 transition-colors"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 cursor-pointer transition-all"
                       onClick={() => setExpanded(isExpanded ? null : app._id)}>
 
                       <div className="flex items-center gap-4">
-                        <span className="text-3xl leading-none flex-shrink-0">{app.visaId?.flag || '🌍'}</span>
+                        <div className="text-4xl leading-none flex-shrink-0 p-3 bg-white/10 rounded-2xl">{app.visaId?.flag || '🌍'}</div>
                         <div>
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <h3 className="font-bold text-gray-900">{app.visaId?.country || 'Unknown'} Visa</h3>
+                          <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <h3 className="font-black text-white text-lg">{app.visaId?.country || 'Unknown'} Visa</h3>
                             <StatusBadge status={app.status} />
-                            {app.paymentStatus === 'paid' && <StatusBadge status="paid" />}
+                            {app.paymentStatus === 'paid' && <div className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold">✓ Paid</div>}
                           </div>
-                          <p className="text-xs text-gray-400">
-                            #{app.applicationId} · {app.planLabel} · ₹{app.pricePaid?.toLocaleString('en-IN')}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            Applied {new Date(app.createdAt).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' })}
+                          <p className="text-sm text-white/60">
+                            #{app.applicationId} · <span className="font-semibold text-white">{app.planLabel}</span> · <span className="text-[#FF7A00] font-bold">₹{app.pricePaid?.toLocaleString('en-IN')}</span>
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* Upload docs */}
-                        {canUpload && (
-                          <label className="tap-target cursor-pointer flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 rounded-xl text-xs font-semibold hover:bg-blue-100 transition-all"
-                            onClick={e => e.stopPropagation()}>
-                            {uploading === app._id
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <Upload className="w-4 h-4" />}
-                            {uploading === app._id ? 'Uploading…' : 'Upload Docs'}
-                            <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png" className="hidden"
-                              onChange={e => handleUpload(app._id, e.target.files)}
-                              disabled={uploading === app._id} />
-                          </label>
-                        )}
-
-                        {/* Pay now (if pending payment, not wallet) */}
-                        {app.paymentStatus === 'pending' && app.pricePaid > 0 && app.paymentMethod !== 'wallet' && (
-                          <Link href={`/apply?appId=${app._id}&amount=${app.pricePaid}&country=${encodeURIComponent(app.visaId?.country || '')}&plan=${encodeURIComponent(app.planLabel || '')}`}
-                            onClick={e => e.stopPropagation()}
-                            className="tap-target flex items-center gap-1.5 px-3 py-2 bg-cta text-white rounded-xl text-xs font-semibold hover:bg-orange-600 transition-all">
-                            💳 Pay Now
-                          </Link>
-                        )}
-
-                        {/* Invoice */}
-                        <a href={pdfURL(app._id)} target="_blank" rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          title="Download Invoice"
-                          className="tap-target flex items-center gap-1.5 px-3 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-semibold hover:bg-gray-200 transition-all">
-                          <Download className="w-4 h-4" /> Invoice
-                        </a>
-
-                        {/* Track via WA */}
-                        <a href={waTrack(app.applicationId, app.applicantName)} target="_blank" rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          title="Track via WhatsApp"
-                          className="tap-target flex items-center gap-1.5 px-3 py-2 bg-green-50 text-green-700 rounded-xl text-xs font-semibold hover:bg-green-100 transition-all">
-                          <MessageCircle className="w-4 h-4" /> Track
-                        </a>
-
-                        <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} />
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-xs text-white/60 uppercase tracking-wide">Status Progress</p>
+                          <p className="text-lg font-black text-white">{currentStep + 1} of {STATUS_STEPS.length}</p>
+                        </div>
+                        <ChevronRight className={`w-5 h-5 text-white/60 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </div>
                     </div>
 
-                    {/* Expanded details */}
+                    {/* Expanded Details */}
                     {isExpanded && (
-                      <div className="px-5 pb-5 bg-gray-50/50 border-t border-gray-100 animate-fade-in-up">
-
-                        {/* Progress bar */}
-                        {app.status !== 'rejected' && (
-                          <div className="mt-4 mb-5">
-                            <div className="flex justify-between mb-2 overflow-x-auto scrollbar-hide gap-1">
-                              {STATUS_STEPS.slice(0, -1).map((s, i) => (
-                                <div key={s} className="flex flex-col items-center flex-shrink-0 text-center min-w-[60px]">
-                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mb-1 transition-all
-                                    ${i <= currentStep ? 'bg-primary text-white' : 'bg-gray-200 text-gray-400'}`}>
-                                    {i < currentStep ? '✓' : i + 1}
+                      <div className="border-t border-white/5 bg-white/2 p-6 space-y-4">
+                        {/* Status Timeline */}
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-white/60 font-bold mb-3">Processing Timeline</p>
+                          <div className="flex gap-2">
+                            {STATUS_STEPS.map((step, idx) => {
+                              const isActive = idx <= currentStep;
+                              const isPast = idx < currentStep;
+                              const isCurrent = idx === currentStep;
+                              
+                              return (
+                                <div key={step} className="flex-1 flex flex-col items-center">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                                    isCurrent ? 'bg-[#FF7A00] text-white scale-125' :
+                                    isPast ? 'bg-emerald-500 text-white' :
+                                    isActive ? 'bg-white/20 text-white/80 border border-white/40' :
+                                    'bg-white/10 text-white/40'
+                                  }`}>
+                                    {isPast ? '✓' : idx + 1}
                                   </div>
-                                  <p className={`text-xs leading-tight ${i <= currentStep ? 'text-primary font-semibold' : 'text-gray-400'}`}>
-                                    {s.replace(/_/g,' ')}
-                                  </p>
+                                  <p className="text-xs text-white/50 mt-1 text-center leading-tight">{step.split('_').pop()}</p>
                                 </div>
-                              ))}
-                            </div>
-                            <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                              <div className="h-full bg-primary rounded-full transition-all duration-500"
-                                style={{ width: `${Math.min(100, (currentStep / (STATUS_STEPS.length - 2)) * 100)}%` }} />
-                            </div>
+                              );
+                            })}
                           </div>
-                        )}
-
-                        {app.status === 'rejected' && app.rejectionReason && (
-                          <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
-                            <p className="text-xs font-semibold text-red-700 mb-1">Rejection Reason</p>
-                            <p className="text-sm text-red-600">{app.rejectionReason}</p>
-                          </div>
-                        )}
-
-                        {/* Applicant details */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-                          {[
-                            ['Applicant',    app.applicantName],
-                            ['Email',        app.applicantEmail],
-                            ['Phone',        app.applicantPhone],
-                            ['Passport',     app.passportNumber || 'Not provided'],
-                            ['Nationality',  app.nationality    || 'Not provided'],
-                            ['Travel Date',  app.travelDate ? new Date(app.travelDate).toLocaleDateString('en-IN') : 'Not set'],
-                          ].map(([k, v]) => (
-                            <div key={k} className="bg-white rounded-xl p-3 border border-gray-100">
-                              <p className="text-xs text-gray-400 mb-0.5">{k}</p>
-                              <p className="text-sm font-semibold text-gray-800 truncate">{v}</p>
-                            </div>
-                          ))}
                         </div>
 
-                        {/* Status history */}
-                        {app.statusHistory?.length > 0 && (
-                          <div className="mt-4">
-                            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Status History</p>
-                            <div className="space-y-2">
-                              {app.statusHistory.slice().reverse().map((h, i) => (
-                                <div key={i} className="flex items-start gap-3 text-xs">
-                                  <div className="w-2 h-2 bg-secondary rounded-full mt-1 flex-shrink-0" />
-                                  <div>
-                                    <span className="font-semibold capitalize text-gray-700">{h.status.replace(/_/g,' ')}</span>
-                                    {h.note && <span className="text-gray-400 ml-2">— {h.note}</span>}
-                                    <p className="text-gray-300 mt-0.5">{new Date(h.updatedAt).toLocaleString('en-IN')}</p>
-                                  </div>
-                                </div>
-                              ))}
+                        {/* Visa ready — dispatched by admin */}
+                        {visaDoc && (
+                          <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border border-emerald-500/30 rounded-2xl p-4 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <PlaneTakeoff className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+                              <div>
+                                <p className="font-bold text-white text-sm">Your visa is ready!</p>
+                                <p className="text-xs text-white/70">Dispatched to your email — download it below.</p>
+                              </div>
                             </div>
+                            <a href={`${uploadsOrigin}/${visaDoc.path.replace(/\\/g, '/').replace(/^.*uploads\//, 'uploads/')}`}
+                              target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                              className="flex-shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 transition-colors">
+                              <Download className="w-4 h-4" /> Download
+                            </a>
                           </div>
                         )}
 
-                        {/* Uploaded docs */}
-                        {app.documents?.length > 0 && (
-                          <div className="mt-4">
-                            <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide mb-2">Uploaded Documents ({app.documents.length})</p>
-                            <div className="flex flex-wrap gap-2">
-                              {app.documents.map((d, i) => (
-                                <span key={i} className="badge bg-blue-50 text-blue-700">
-                                  📎 {d.originalName || d.storedName || `Doc ${i+1}`}
-                                </span>
-                              ))}
+                        {/* Additional documents requested by admin */}
+                        {pendingDocRequests.length > 0 && (
+                          <div className="bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 rounded-2xl p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                              <p className="font-bold text-white text-sm">Additional documents needed</p>
                             </div>
+                            {pendingDocRequests.map((r, i) => (
+                              <div key={i} className="text-xs text-amber-100 mb-1">
+                                <span className="font-semibold">{r.items.join(', ')}</span>
+                                {r.note && <span className="text-amber-200/80"> — {r.note}</span>}
+                              </div>
+                            ))}
+                            <p className="text-xs text-white/60 mt-2">Upload them below, or reply on WhatsApp.</p>
                           </div>
                         )}
+
+                        {/* Documents Upload Section */}
+                        {canUpload && (
+                          <div className="bg-gradient-to-br from-[#FF7A00]/20 to-orange-500/10 border border-[#FF7A00]/30 rounded-2xl p-4">
+                            <label className="flex flex-col items-center gap-3 cursor-pointer">
+                              <input type="file" multiple onChange={(e) => handleUpload(app._id, e.target.files)}
+                                disabled={uploading === app._id}
+                                className="hidden" accept=".pdf,.jpg,.jpeg,.png" />
+                              <Upload className={`w-5 h-5 ${uploading === app._id ? 'animate-spin' : 'text-[#FF7A00]'}`} />
+                              <div className="text-center">
+                                <p className="font-bold text-white text-sm">{uploading === app._id ? 'Uploading...' : 'Upload Documents'}</p>
+                                <p className="text-xs text-white/70">PDF, JPG, PNG (max 5MB each)</p>
+                              </div>
+                            </label>
+                          </div>
+                        )}
+
+                        {/* Approved, visa file not dispatched yet */}
+                        {app.status === 'approved' && !visaDoc && (
+                          <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4 flex items-center gap-3">
+                            <CheckCircle className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                            <p className="text-xs text-blue-100">Your visa is approved! The final visa file will appear here for download as soon as it's dispatched.</p>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                          <a href={pdfURL(app._id)} target="_blank" rel="noopener noreferrer"
+                            className="flex-1 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-500/30 transition-all border border-blue-500/30">
+                            <Download className="w-4 h-4" /> Download Invoice
+                          </a>
+                          <a href={waTrack(app.applicationId, user?.name)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                            className="flex-1 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-green-500/30 transition-all border border-green-500/30">
+                            <MessageCircle className="w-4 h-4" /> Track
+                          </a>
+                        </div>
                       </div>
                     )}
                   </div>

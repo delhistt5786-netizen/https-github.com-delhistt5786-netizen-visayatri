@@ -70,6 +70,9 @@ export const waTrack = (appId, name) =>
 export const waGeneral = () =>
   waLink(`Hello Visayatri! 👋\n\nI need help with visa services. Please guide me. Thank you!`);
 
+export const waForgotPassword = () =>
+  waLink(`🔒 *Forgot Password*\n\nHi, I'm unable to log in and need help resetting my password. Thank you!`);
+
 export const waTopUp = (agentName, agentCode, amount) =>
   waLink([
     `💳 *Wallet Top-Up Request*`,

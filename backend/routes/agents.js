@@ -1,7 +1,8 @@
-const router      = require('express').Router();
-const User        = require('../models/User');
-const Application = require('../models/Application');
-const Transaction = require('../models/Transaction');
+const router        = require('express').Router();
+const User          = require('../models/User');
+const Application   = require('../models/Application');
+const Transaction   = require('../models/Transaction');
+const WalletRequest = require('../models/WalletRequest');
 const { protect, authorize, agentApproved } = require('../middleware/auth');
 const { creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
@@ -80,12 +81,79 @@ router.get('/wallet', protect, authorize('agent'), agentApproved, async (req, re
 });
 
 /* ── POST /api/agents/wallet/topup-request ──────────────── */
-router.post('/wallet/topup-request', protect, authorize('agent'), agentApproved, (req, res) => {
-  const { amount } = req.body;
-  if (!amount || Number(amount) <= 0)
-    return res.status(400).json({ success: false, message: 'Enter a positive amount.' });
-  const link = wa.walletTopUpMessage(req.user.name, req.user.agentCode, amount);
-  res.json({ success: true, whatsappLink: link });
+/* Creates a trackable pending request AND returns a WhatsApp link so the   */
+/* agent can still ping admin directly if they want a faster turnaround.   */
+router.post('/wallet/topup-request', protect, authorize('agent'), agentApproved, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    if (!amount || Number(amount) <= 0)
+      return res.status(400).json({ success: false, message: 'Enter a positive amount.' });
+
+    const request = await WalletRequest.create({ agentId: req.user._id, amount: Number(amount) });
+    const link = wa.walletTopUpMessage(req.user.name, req.user.agentCode, amount);
+    res.json({ success: true, whatsappLink: link, request });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── GET /api/agents/wallet/requests  — agent's own ─────── */
+router.get('/wallet/requests', protect, authorize('agent'), agentApproved, async (req, res) => {
+  try {
+    const requests = await WalletRequest.find({ agentId: req.user._id }).sort('-createdAt').limit(30);
+    res.json({ success: true, data: requests });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── GET /api/agents/wallet-requests  — admin, all agents ── */
+router.get('/wallet-requests', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = status ? { status } : {};
+    const requests = await WalletRequest.find(filter)
+      .populate('agentId', 'name agentCode email walletBalance')
+      .sort('-createdAt').limit(100);
+    res.json({ success: true, data: requests });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── PUT /api/agents/wallet-requests/:id/approve  — admin ── */
+router.put('/wallet-requests/:id/approve', protect, authorize('admin'), async (req, res) => {
+  try {
+    const request = await WalletRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found.' });
+    if (request.status !== 'pending')
+      return res.status(400).json({ success: false, message: `Request already ${request.status}.` });
+
+    const { agent, transaction } = await creditWallet(
+      request.agentId, request.amount, 'top_up',
+      `Top-up request approved by ${req.user.name}`,
+      { createdBy: req.user._id },
+    );
+
+    request.status     = 'approved';
+    request.reviewedBy = req.user._id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    res.json({ success: true, message: `₹${request.amount.toLocaleString('en-IN')} credited to ${agent.name}`, request, walletBalance: agent.walletBalance, transaction });
+  } catch (err) { res.status(400).json({ success: false, message: err.message }); }
+});
+
+/* ── PUT /api/agents/wallet-requests/:id/reject  — admin ─── */
+router.put('/wallet-requests/:id/reject', protect, authorize('admin'), async (req, res) => {
+  try {
+    const request = await WalletRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ success: false, message: 'Request not found.' });
+    if (request.status !== 'pending')
+      return res.status(400).json({ success: false, message: `Request already ${request.status}.` });
+
+    request.status     = 'rejected';
+    request.note       = req.body.note || '';
+    request.reviewedBy = req.user._id;
+    request.reviewedAt = new Date();
+    await request.save();
+
+    res.json({ success: true, message: 'Request rejected.', request });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
 /* ── POST /api/agents/wallet/credit  — admin ────────────── */
@@ -113,6 +181,32 @@ router.post('/wallet/credit', protect, authorize('admin'), async (req, res) => {
       transaction,
     });
   } catch (err) { res.status(400).json({ success: false, message: err.message }); }
+});
+
+/* ── POST /api/agents  — admin creates agent directly ──── */
+router.post('/', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { name, email, password, phone, companyName, city, commissionRate } = req.body;
+    if (!name || !email || !password)
+      return res.status(400).json({ success: false, message: 'Name, email and password are required.' });
+    if (password.length < 6)
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+
+    if (await User.findOne({ email }))
+      return res.status(409).json({ success: false, message: 'Email already registered.' });
+
+    const agent = await User.create({
+      name, email, password, phone: phone || '',
+      role: 'agent',
+      agentCode: 'AGT' + Date.now().toString().slice(-6),
+      isApproved: true,
+      companyName: companyName || '',
+      city: city || '',
+      commissionRate: commissionRate !== undefined ? Number(commissionRate) : 10,
+    });
+
+    res.status(201).json({ success: true, data: agent.toSafeObject(), message: `Agent ${agent.name} created and approved.` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
 /* ── GET /api/agents/list  — admin ─────────────────────── */

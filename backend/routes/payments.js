@@ -91,8 +91,12 @@ router.post('/create-order', protect, async (req, res) => {
       applicantPhone: app.applicantPhone,
     });
   } catch (err) {
-    console.error('[create-order]', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    // Razorpay SDK errors come as { statusCode, error: { code, description } },
+    // not a plain Error — err.message is undefined for those, so extract the
+    // actual description or the request would otherwise fail with no message.
+    const message = err.error?.description || err.message || 'Payment order creation failed.';
+    console.error('[create-order]', message);
+    res.status(500).json({ success: false, message });
   }
 });
 

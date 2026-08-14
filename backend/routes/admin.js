@@ -2,6 +2,7 @@ const router      = require('express').Router();
 const User        = require('../models/User');
 const Application = require('../models/Application');
 const Visa        = require('../models/Visa');
+const Country     = require('../models/Country');
 const Transaction = require('../models/Transaction');
 const Settings    = require('../models/Settings');
 const { protect, authorize } = require('../middleware/auth');
@@ -144,6 +145,181 @@ router.get('/transactions', protect, authorize('admin'), async (req, res) => {
     const total = await Transaction.countDocuments(filter);
     res.json({ success: true, data: txns, total });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║              VISA MANAGEMENT ENDPOINTS                        ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── GET /api/admin/visas ─────────────────────────────
+// Get all visas with optional filters
+router.get('/visas', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { region, isActive } = req.query;
+    const filter = {};
+    if (region) filter.region = region;
+    if (isActive !== undefined) filter.isActive = isActive === 'true';
+    
+    const visas = await Visa.find(filter).sort({ country: 1 }).populate('countryRef', 'name code flag continent');
+    res.json({ success: true, data: visas, total: visas.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── GET /api/admin/visas/:id ─────────────────────────
+// Get specific visa by ID
+router.get('/visas/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const visa = await Visa.findById(req.params.id).populate('countryRef', 'name code flag continent');
+    if (!visa) {
+      return res.status(404).json({ success: false, message: 'Visa not found' });
+    }
+    res.json({ success: true, data: visa });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/admin/visas ────────────────────────────
+// Create new visa
+router.post('/visas', protect, authorize('admin'), async (req, res) => {
+  try {
+    let { country, countryRef, slug, flag, region, plans, description, requirements, faqs, processingTime, visaType } = req.body;
+
+    // If a Country reference was picked from the dropdown, derive the display fields from it
+    if (countryRef) {
+      const countryDoc = await Country.findById(countryRef);
+      if (!countryDoc) return res.status(400).json({ success: false, message: 'Selected country not found.' });
+      country = countryDoc.name;
+      flag = flag || countryDoc.flag;
+    }
+
+    // Validate required fields
+    if (!country || !slug || !region) {
+      return res.status(400).json({
+        success: false,
+        message: 'Country, slug, and region are required'
+      });
+    }
+
+    // Check if slug already exists
+    const existing = await Visa.findOne({ slug });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Slug already exists. Use a unique slug.'
+      });
+    }
+
+    const visa = new Visa({
+      country,
+      countryRef: countryRef || undefined,
+      slug: slug.toLowerCase().trim(),
+      flag: flag || '',
+      region,
+      plans: plans || [],
+      description: description || '',
+      requirements: requirements || [],
+      faqs: faqs || [],
+      processingTime: processingTime || '3-5 business days',
+      visaType: visaType || 'E-Visa',
+      isActive: true
+    });
+
+    await visa.save();
+    res.status(201).json({ success: true, data: visa, message: 'Visa created successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── PUT /api/admin/visas/:id ─────────────────────────
+// Update visa details
+router.put('/visas/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    let { country, countryRef, slug, flag, region, plans, description, requirements, faqs, processingTime, visaType, isActive } = req.body;
+
+    let visa = await Visa.findById(req.params.id);
+    if (!visa) {
+      return res.status(404).json({ success: false, message: 'Visa not found' });
+    }
+
+    // Check if new slug is unique (if being changed)
+    if (slug && slug.toLowerCase() !== visa.slug) {
+      const existing = await Visa.findOne({ slug: slug.toLowerCase() });
+      if (existing) {
+        return res.status(400).json({
+          success: false,
+          message: 'Slug already exists. Use a unique slug.'
+        });
+      }
+    }
+
+    // If a Country reference was picked from the dropdown, derive the display fields from it
+    if (countryRef) {
+      const countryDoc = await Country.findById(countryRef);
+      if (!countryDoc) return res.status(400).json({ success: false, message: 'Selected country not found.' });
+      country = country || countryDoc.name;
+      flag = flag || countryDoc.flag;
+      visa.countryRef = countryRef;
+    }
+
+    // Update fields
+    if (country) visa.country = country;
+    if (slug) visa.slug = slug.toLowerCase().trim();
+    if (flag !== undefined) visa.flag = flag;
+    if (region) visa.region = region;
+    if (plans) visa.plans = plans;
+    if (description !== undefined) visa.description = description;
+    if (requirements) visa.requirements = requirements;
+    if (faqs) visa.faqs = faqs;
+    if (processingTime) visa.processingTime = processingTime;
+    if (visaType) visa.visaType = visaType;
+    if (isActive !== undefined) visa.isActive = isActive;
+
+    await visa.save();
+    res.json({ success: true, data: visa, message: 'Visa updated successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── PATCH /api/admin/visas/:id/toggle ────────────────
+// Toggle visa active status
+router.patch('/visas/:id/toggle', protect, authorize('admin'), async (req, res) => {
+  try {
+    let visa = await Visa.findById(req.params.id);
+    if (!visa) {
+      return res.status(404).json({ success: false, message: 'Visa not found' });
+    }
+
+    visa.isActive = !visa.isActive;
+    await visa.save();
+    
+    res.json({ 
+      success: true, 
+      data: visa, 
+      message: `Visa ${visa.isActive ? 'activated' : 'deactivated'} successfully` 
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── DELETE /api/admin/visas/:id ──────────────────────
+// Delete visa
+router.delete('/visas/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const visa = await Visa.findByIdAndDelete(req.params.id);
+    if (!visa) {
+      return res.status(404).json({ success: false, message: 'Visa not found' });
+    }
+
+    res.json({ success: true, message: 'Visa deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 // ── GET /api/admin/settings ─────────────────────────────

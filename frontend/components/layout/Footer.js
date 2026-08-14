@@ -1,26 +1,31 @@
 import Link from 'next/link';
-import { Globe, Phone, Mail, MapPin } from 'lucide-react';
+import Image from 'next/image';
+import { Phone, Mail, MapPin } from 'lucide-react';
 
 export default function Footer() {
   return (
     <footer className="bg-primary text-white pt-16 pb-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-10 mb-12">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-cta rounded-lg flex items-center justify-center">
-                <Globe className="w-5 h-5 text-white" />
+            <div className="mb-4 w-fit rounded-lg bg-white px-3 py-2">
+              <div className="relative h-20 w-48">
+                <Image src="/logo.svg" alt="Visayatri Visa Services" fill sizes="192px" className="object-contain" />
               </div>
-              <span className="font-bold text-xl">Visayatri</span>
             </div>
-            <p className="text-blue-200 text-sm leading-relaxed">Fast & Trusted Visa Services. Apply online for 39+ countries with expert guidance.</p>
+            <p className="text-blue-200 text-sm leading-relaxed">Fast & Trusted Visa Services by Shoib Tour and Travels. Apply online for 39+ countries with expert guidance.</p>
             <div className="mt-4 space-y-2">
-              <a href="https://wa.me/919717743876" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white">
-                <Phone className="w-4 h-4" /> +91 97177 43876
+              <a href="https://wa.me/919717743876" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white transition-colors">
+                <Phone className="w-4 h-4 flex-shrink-0" />
+                <span className="whitespace-nowrap">+91 97177 43876</span>
               </a>
-              <a href="mailto:visa.stt5786@gmail.com" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white">
-                <Mail className="w-4 h-4" /> visa.stt5786@gmail.com
+              <a href="mailto:visa.stt5786@gmail.com" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white transition-colors">
+                <Mail className="w-4 h-4 flex-shrink-0" /> visa.stt5786@gmail.com
               </a>
+              <div className="flex items-start gap-2 text-sm text-blue-200">
+                <MapPin className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span className="leading-tight">C159 Opp. Fortis Escort Hospital, Sarai Jullena Okhla, New Delhi 110025</span>
+              </div>
             </div>
           </div>
           <div>
@@ -40,6 +45,15 @@ export default function Footer() {
             </ul>
           </div>
           <div>
+            <h4 className="font-semibold mb-4 text-lg">Company</h4>
+            <ul className="space-y-2 text-sm text-blue-200">
+              <li><Link href="/about" className="hover:text-white">About Us</Link></li>
+              <li><Link href="/contact" className="hover:text-white">Contact Us</Link></li>
+              <li><Link href="/privacy" className="hover:text-white">Privacy Policy</Link></li>
+              <li><a href="https://wa.me/919717743876" className="hover:text-white">Support</a></li>
+            </ul>
+          </div>
+          <div>
             <h4 className="font-semibold mb-4 text-lg">For Partners</h4>
             <ul className="space-y-2 text-sm text-blue-200">
               <li><Link href="/auth/register?role=agent" className="hover:text-white">Become an Agent</Link></li>
@@ -53,7 +67,7 @@ export default function Footer() {
           </div>
         </div>
         <div className="border-t border-blue-800 pt-6 flex flex-col md:flex-row justify-between items-center gap-3 text-sm text-blue-300">
-          <p>© 2025 Visayatri. All rights reserved.</p>
+          <p>© 2025 Shoib Tour and Travels. All rights reserved.</p>
           <p>Made with ❤️ for travelers worldwide</p>
         </div>
       </div>

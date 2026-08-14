@@ -1,6 +1,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const Visa = require('../models/Visa');
+const Country = require('../models/Country');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 
@@ -24,6 +25,23 @@ const plan = (label, base, contactUs = false) => {
   const t = tiers(base);
   return { label, ...t };
 };
+
+/**
+ * Nationalities we must always offer in the applicant-facing dropdowns even
+ * though they have no visa product of their own (this is an India-based
+ * service — the majority of applicants are Indian nationals).
+ */
+const NATIONALITY_ONLY_COUNTRIES = [
+  { name: 'India', flag: '🇮🇳', continent: 'asia' },
+  { name: 'Pakistan', flag: '🇵🇰', continent: 'asia' },
+  { name: 'Bangladesh', flag: '🇧🇩', continent: 'asia' },
+  { name: 'Nepal', flag: '🇳🇵', continent: 'asia' },
+  { name: 'United States', flag: '🇺🇸', continent: 'north-america' },
+  { name: 'United Kingdom', flag: '🇬🇧', continent: 'europe' },
+  { name: 'Canada', flag: '🇨🇦', continent: 'north-america' },
+  { name: 'Australia', flag: '🇦🇺', continent: 'oceania' },
+  { name: 'United Arab Emirates', flag: '🇦🇪', continent: 'middle-east' },
+];
 
 const visaData = [
   // ── MIDDLE EAST ──────────────────────────────────────────────────────────
@@ -71,22 +89,22 @@ const visaData = [
     processingTime: '3-5 business days', visaType: 'E-Visa',
     requirements: ['Valid passport', 'White background photo', 'Hotel booking', 'Return ticket'],
   },
+  {
+    country: 'UAE', slug: 'dubai', flag: '🇦🇪', region: 'middle-east', isRiskFree: true,
+    plans: [
+      plan('30 Days Single Entry', 6500),
+      plan('60 Days Multi Entry',  9800),
+    ],
+    processingTime: '24-48 hrs', visaType: 'E-Visa',
+    requirements: ['Valid passport (6+ months)', 'White background photo', 'Return ticket'],
+    faqs: [{ question: 'How fast is UAE visa approval?', answer: 'Most UAE e-visas are approved within 24-48 hours.' }],
+  },
   // ── ASIA ─────────────────────────────────────────────────────────────────
   {
     country: 'Singapore', slug: 'singapore', flag: '🇸🇬', region: 'asia', isRiskFree: true,
     plans: [ plan('30 Days', 0, true) ],
     processingTime: 'Contact us', visaType: 'E-Visa',
     requirements: ['Valid passport', 'White background photo'],
-  },
-  {
-    country: 'India', slug: 'india', flag: '🇮🇳', region: 'asia',
-    plans: [
-      plan('30 Days',      3500),
-      plan('1 Year Multi', 4900),
-      plan('5 Year Multi', 8500),
-    ],
-    processingTime: '3-5 business days', visaType: 'E-Visa',
-    requirements: ['Valid passport', 'White background photo', 'Travel itinerary'],
   },
   {
     country: 'Russia', slug: 'russia', flag: '🇷🇺', region: 'asia',
@@ -288,9 +306,31 @@ async function seed() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('✅ Connected to MongoDB');
 
+  // Countries — upsert (not wiped) so admin-added countries survive a re-seed
+  const regionToContinent = { 'middle-east': 'middle-east', asia: 'asia', africa: 'africa', europe: 'europe', others: 'others' };
+  const countryByName = new Map();
+  visaData.forEach(v => {
+    if (!countryByName.has(v.country)) {
+      countryByName.set(v.country, { name: v.country, flag: v.flag, continent: regionToContinent[v.region] || 'others' });
+    }
+  });
+  // The Country list also powers the applicant's Nationality / Current Country
+  // dropdowns, which must NOT be limited to countries that happen to have a
+  // visa product (e.g. removing an India e-visa should never remove "India"
+  // as a selectable nationality — this is an India-based service).
+  NATIONALITY_ONLY_COUNTRIES.forEach(c => {
+    if (!countryByName.has(c.name)) countryByName.set(c.name, c);
+  });
+  const countryIdByName = new Map();
+  for (const [name, data] of countryByName) {
+    const c = await Country.findOneAndUpdate({ name }, { $setOnInsert: data }, { upsert: true, new: true });
+    countryIdByName.set(name, c._id);
+  }
+  console.log(`✅ Seeded/verified ${countryIdByName.size} countries`);
+
   // Visas
   await Visa.deleteMany({});
-  const inserted = await Visa.insertMany(visaData);
+  const inserted = await Visa.insertMany(visaData.map(v => ({ ...v, countryRef: countryIdByName.get(v.country) })));
   console.log(`✅ Seeded ${inserted.length} visas with triple-tier pricing`);
 
   // Admin

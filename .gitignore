@@ -28,3 +28,6 @@ npm-debug.log*
 .vscode/
 .idea/
 *.swp
+
+# Python virtualenv (unrelated to this Node project)
+.venv/

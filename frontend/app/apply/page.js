@@ -75,7 +75,7 @@ function PaymentContent() {
           currency:    'INR',
           name:        'Visayatri',
           description: `${country} Visa — ${plan}`,
-          image:       '/logo.png',
+          image:       '/logo.svg',
           order_id:    orderData.order.id,
           prefill: {
             name:    orderData.applicantName  || user?.name  || '',

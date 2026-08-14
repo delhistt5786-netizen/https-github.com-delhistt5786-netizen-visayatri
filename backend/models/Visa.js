@@ -19,6 +19,7 @@ const planSchema = new mongoose.Schema({
 
 const visaSchema = new mongoose.Schema({
   country:     { type: String, required: true, trim: true },
+  countryRef:  { type: mongoose.Schema.Types.ObjectId, ref: 'Country' },
   slug:        { type: String, required: true, unique: true, lowercase: true, trim: true },
   flag:        { type: String, default: '' },
   region:      { type: String, enum: ['middle-east','asia','africa','europe','others'], required: true },

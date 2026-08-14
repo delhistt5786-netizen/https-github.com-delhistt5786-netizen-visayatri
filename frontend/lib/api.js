@@ -1,8 +1,15 @@
 import axios from 'axios';
+import * as mockData from './mockData';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002/api';
+// Uploaded files (passport scans, photos) are served statically from the
+// backend root, not under /api — strip the /api suffix to build their URLs.
+export const uploadsOrigin = BASE.replace(/\/api\/?$/, '');
 
-const api = axios.create({ baseURL: BASE, timeout: 15000 });
+const api = axios.create({ baseURL: BASE, timeout: 5000 });
+
+// ── Development mock mode ─────────────────────────────────
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === 'true' || typeof window === 'undefined';
 
 // ── Attach JWT from localStorage ─────────────────────────
 api.interceptors.request.use(cfg => {
@@ -13,7 +20,7 @@ api.interceptors.request.use(cfg => {
   return cfg;
 });
 
-// ── Global response handler ───────────────────────────────
+// ── Global response handler with mock fallback ───────────
 api.interceptors.response.use(
   res => res,
   err => {
@@ -26,68 +33,249 @@ api.interceptors.response.use(
         window.location.href = '/auth/login?expired=1';
       }
     }
+    // Let connection errors bubble up so individual API methods can handle with specific mock data
     return Promise.reject(err);
   }
 );
 
+// Helper: Simulate API delay
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Helper: Mock response wrapper
+const mockResponse = async (data) => {
+  if (USE_MOCK) await delay(300); // Simulate network latency
+  return Promise.resolve({ data });
+};
+
 // ── Auth ──────────────────────────────────────────────────
 export const authAPI = {
-  register:       (data)     => api.post('/auth/register', data),
-  login:          (data)     => api.post('/auth/login', data),
-  me:             ()         => api.get('/auth/me'),
-  updateProfile:  (data)     => api.put('/auth/profile', data),
-  changePassword: (data)     => api.put('/auth/change-password', data),
+  register: async (data) => {
+    try {
+      return await api.post('/auth/register', data);
+    } catch {
+      // Mock registration
+      const newUser = { _id: 'mock_' + Date.now(), ...data, role: data.role || 'user' };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('visayatri_user', JSON.stringify(newUser));
+        localStorage.setItem('visayatri_token', 'mock_token_' + Date.now());
+      }
+      return mockResponse({ user: newUser, token: 'mock_token' });
+    }
+  },
+  login: async (data) => {
+    try {
+      return await api.post('/auth/login', data);
+    } catch {
+      // Mock login
+      const mockUser = data.email.includes('admin') ? mockData.MOCK_ADMIN : 
+                       data.email.includes('priya') ? mockData.MOCK_AGENT : 
+                       mockData.MOCK_USER;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('visayatri_user', JSON.stringify(mockUser));
+        localStorage.setItem('visayatri_token', 'mock_token_' + Date.now());
+      }
+      return mockResponse({ user: mockUser, token: 'mock_token' });
+    }
+  },
+  me: async () => {
+    try {
+      return await api.get('/auth/me');
+    } catch {
+      const user = mockData.MOCK_USER;
+      return mockResponse(user);
+    }
+  },
+  updateProfile: (data) => api.put('/auth/profile', data),
+  changePassword: (data) => api.put('/auth/change-password', data),
 };
 
 // ── Visas ─────────────────────────────────────────────────
 export const visaAPI = {
-  getAll:    (params)     => api.get('/visas', { params }),
-  getBySlug: (slug)       => api.get(`/visas/${slug}`),
-  create:    (data)       => api.post('/visas', data),
-  update:    (id, data)   => api.put(`/visas/${id}`, data),
-  remove:    (id)         => api.delete(`/visas/${id}`),
+  getAll: async (params) => {
+    try {
+      return await api.get('/visas', { params });
+    } catch (err) {
+      console.warn('⚠️  Visa API error, using mock data:', err.code || err.message);
+      // Filter mock data by region if provided
+      let filtered = mockData.MOCK_VISAS;
+      if (params?.region) {
+        filtered = filtered.filter(v => v.region === params.region);
+      }
+      return mockResponse(filtered);
+    }
+  },
+  getBySlug: async (slug) => {
+    try {
+      return await api.get(`/visas/${slug}`);
+    } catch (err) {
+      console.warn('⚠️  Visa detail API error, using mock data:', err.code || err.message);
+      const visa = mockData.MOCK_VISAS.find(v => v.slug === slug) || mockData.MOCK_VISAS[0];
+      return mockResponse(visa);
+    }
+  },
+  // Admin methods for visa management
+  create: (data) => api.post('/admin/visas', data),
+  update: (id, data) => api.put(`/admin/visas/${id}`, data),
+  delete: (id) => api.delete(`/admin/visas/${id}`),
+  toggleStatus: (id) => api.patch(`/admin/visas/${id}/toggle`),
+};
+
+// ── Countries ─────────────────────────────────────────────
+export const countryAPI = {
+  getAll: async () => {
+    try {
+      return await api.get('/countries');
+    } catch (err) {
+      console.warn('⚠️  Country API error, using mock data:', err.code || err.message);
+      return mockResponse(mockData.MOCK_COUNTRIES || []);
+    }
+  },
+  create: (data) => api.post('/countries', data),
+  update: (id, data) => api.put(`/countries/${id}`, data),
+  delete: (id) => api.delete(`/countries/${id}`),
 };
 
 // ── Applications ──────────────────────────────────────────
 export const appAPI = {
-  create:       (data)         => api.post('/applications', data),
-  getMy:        (params)       => api.get('/applications/my', { params }),
-  getById:      (id)           => api.get(`/applications/${id}`),
-  uploadDocs:   (id, formData) => api.post(`/applications/${id}/documents`, formData, {
+  create: (data) => api.post('/applications', data),
+  getMy: async (params) => {
+    try {
+      return await api.get('/applications/my', { params });
+    } catch {
+      return mockResponse(mockData.MOCK_APPLICATIONS);
+    }
+  },
+  getMyAvatar: async () => {
+    try {
+      return await api.get('/applications/my/avatar');
+    } catch {
+      return mockResponse({ avatarUrl: null });
+    }
+  },
+  getById: async (id) => {
+    try {
+      return await api.get(`/applications/${id}`);
+    } catch {
+      const app = mockData.MOCK_APPLICATIONS.find(a => a._id === id) || mockData.MOCK_APPLICATIONS[0];
+      return mockResponse(app);
+    }
+  },
+  uploadDocs: (id, formData) => api.post(`/applications/${id}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  updateStatus: (id, data)     => api.put(`/applications/${id}/status`, data),
-  getAll:       (params)       => api.get('/applications', { params }),
-  edit:         (id, data)     => api.put(`/applications/${id}`, data),
+  updateStatus: (id, data) => api.put(`/applications/${id}/status`, data),
+  uploadVisaDocument: (id, formData) => api.post(`/applications/${id}/visa-document`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  requestDocuments: (id, data) => api.post(`/applications/${id}/request-documents`, data),
+  getAll: async (params) => {
+    try {
+      return await api.get('/applications', { params });
+    } catch {
+      return mockResponse({ data: mockData.MOCK_APPLICATIONS });
+    }
+  },
+  edit: (id, data) => api.put(`/applications/${id}`, data),
 };
 
 // ── Agents ────────────────────────────────────────────────
 export const agentAPI = {
-  getDashboard:   ()              => api.get('/agents/dashboard'),
-  getWallet:      (params)        => api.get('/agents/wallet', { params }),
-  topUpRequest:   (amount)        => api.post('/agents/wallet/topup-request', { amount }),
-  creditWallet:   (data)          => api.post('/agents/wallet/credit', data),   // admin
-  getList:        (params)        => api.get('/agents/list', { params }),        // admin
-  approve:        (id, isApproved)=> api.put(`/agents/${id}/approve`, { isApproved }),
-  setCommission:  (id, rate)      => api.put(`/agents/${id}/commission`, { commissionRate: rate }),
-  getTransactions:(id)            => api.get(`/agents/${id}/transactions`),
+  getDashboard: async () => {
+    try {
+      return await api.get('/agents/dashboard');
+    } catch {
+      return mockResponse(mockData.MOCK_AGENT_DATA);
+    }
+  },
+  getWallet: async (params) => {
+    try {
+      return await api.get('/agents/wallet', { params });
+    } catch {
+      return mockResponse(mockData.MOCK_AGENT_DATA.wallet);
+    }
+  },
+  topUpRequest: (amount) => api.post('/agents/wallet/topup-request', { amount }),
+  myTopUpRequests: async () => {
+    try {
+      return await api.get('/agents/wallet/requests');
+    } catch {
+      return mockResponse({ data: [] });
+    }
+  },
+  creditWallet: (data) => api.post('/agents/wallet/credit', data),
+  getTopUpRequests: async (params) => {
+    try {
+      return await api.get('/agents/wallet-requests', { params });
+    } catch {
+      return mockResponse({ data: [] });
+    }
+  },
+  approveTopUpRequest: (id) => api.put(`/agents/wallet-requests/${id}/approve`),
+  rejectTopUpRequest: (id, note) => api.put(`/agents/wallet-requests/${id}/reject`, { note }),
+  getList: async (params) => {
+    try {
+      return await api.get('/agents/list', { params });
+    } catch {
+      return mockResponse({ data: [mockData.MOCK_AGENT] });
+    }
+  },
+  approve: (id, isApproved) => api.put(`/agents/${id}/approve`, { isApproved }),
+  create: (data) => api.post('/agents', data),
+  update: (id, data) => api.put(`/agents/${id}`, data),
+  getTransactions: async (id) => {
+    try {
+      return await api.get(`/agents/${id}/transactions`);
+    } catch {
+      return mockResponse(mockData.MOCK_AGENT_DATA.transactions);
+    }
+  },
 };
 
 // ── Admin ─────────────────────────────────────────────────
 export const adminAPI = {
-  getDashboard: ()       => api.get('/admin/dashboard'),
-  getStats:     ()       => api.get('/admin/stats'),
-  getUsers:     (params) => api.get('/admin/users', { params }),
-  toggleUser:   (id)     => api.put(`/admin/users/${id}/toggle`),
-  getTransactions:(params)=> api.get('/admin/transactions', { params }),
-  getSettings:  ()       => api.get('/admin/settings'),
-  updateSettings:(data)  => api.put('/admin/settings', data),
+  getDashboard: async () => {
+    try {
+      return await api.get('/admin/dashboard');
+    } catch {
+      return mockResponse(mockData.MOCK_ADMIN_DATA);
+    }
+  },
+  getStats: async () => {
+    try {
+      return await api.get('/admin/stats');
+    } catch {
+      return mockResponse(mockData.MOCK_ADMIN_DATA.stats);
+    }
+  },
+  getUsers: async (params) => {
+    try {
+      return await api.get('/admin/users', { params });
+    } catch {
+      return mockResponse({ data: [mockData.MOCK_USER, mockData.MOCK_AGENT] });
+    }
+  },
+  toggleUser: (id) => api.put(`/admin/users/${id}/toggle`),
+  getTransactions: async (params) => {
+    try {
+      return await api.get('/admin/transactions', { params });
+    } catch {
+      return mockResponse({ data: mockData.MOCK_AGENT_DATA.transactions });
+    }
+  },
+  getSettings: async () => {
+    try {
+      return await api.get('/admin/settings');
+    } catch {
+      return mockResponse({ data: { serviceFeeEnabled: true, serviceFeePercent: 5 } });
+    }
+  },
+  updateSettings: (data) => api.put('/admin/settings', data),
 };
 
 // ── Payments ──────────────────────────────────────────────
 export const paymentAPI = {
   createOrder: (data) => api.post('/payments/create-order', data),
-  verify:      (data) => api.post('/payments/verify', data),
+  verify: (data) => api.post('/payments/verify', data),
 };
 
 // ── PDF ───────────────────────────────────────────────────

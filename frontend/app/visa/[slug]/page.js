@@ -2,15 +2,27 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle, Clock, ArrowLeft, MessageCircle, ChevronDown, TrendingUp, Wallet, CreditCard } from 'lucide-react';
+import { CheckCircle, Clock, ArrowLeft, MessageCircle, ChevronDown, TrendingUp, Wallet, CreditCard, Calendar, FileText, Users, Shield, MapPin, Zap } from 'lucide-react';
 import { visaAPI, appAPI, pdfURL } from '../../../lib/api';
 import { waApply, waAgentApply } from '../../../lib/whatsapp';
-import { getUser } from '../../../lib/auth';
+import { getUser, setAuth } from '../../../lib/auth';
 import Loading from '../../../components/ui/Loading';
+import DocumentUpload from '../../../components/visa/DocumentUpload';
+import CountrySelect from '../../../components/common/CountrySelect';
+import ApplyStepper from '../../../components/visa/ApplyStepper';
 import toast from 'react-hot-toast';
 
 const settingsAPI = {
-  get: () => fetch(`${process.env.NEXT_PUBLIC_API_URL}/settings`).then(r => r.json())
+  get: async () => {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/settings`);
+      if (!res.ok) throw new Error('Settings fetch failed');
+      return await res.json();
+    } catch (err) {
+      console.warn('⚠️  Settings API error, using defaults:', err.message);
+      return { data: { serviceFeeEnabled: false, serviceFee: 0 } };
+    }
+  }
 };
 
 export default function VisaDetailPage() {
@@ -26,15 +38,35 @@ export default function VisaDetailPage() {
   const [openFaq, setOpenFaq]         = useState(null);
   const [applying, setApplying]       = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('whatsapp');
+  const [expandedSection, setExpandedSection] = useState('overview');
   const [form, setForm] = useState({
-    applicantName: user?.name || '',
-    applicantEmail: user?.email || '',
-    applicantPhone: user?.phone || '',
+    // Passport details (auto-filled by OCR when front/back passport is uploaded, always editable)
+    firstName: user?.name?.split(' ')[0] || '',
+    lastName: user?.name?.split(' ').slice(1).join(' ') || '',
     passportNumber: '',
+    dateOfBirth: '',
     nationality: '',
+    gender: '',
+    passportIssueDate: '',
+    passportExpiryDate: '',
+
+    // Travel details
     travelDate: '',
     returnDate: '',
     purposeOfVisit: 'Tourism',
+
+    // Contact details
+    applicantEmail: user?.email || '',
+    applicantPhone: user?.phone || '',
+  });
+  const [documents, setDocuments] = useState({
+    frontPassport: null,
+    backPassport: null,
+    digitalPhoto: null,
+    optional1: null,
+    optional2: null,
+    optional3: null,
+    optional4: null,
   });
 
   useEffect(() => {
@@ -52,28 +84,92 @@ export default function VisaDetailPage() {
   }, [slug]);
 
   const basePrice = isAgent ? selectedPlan?.price : (selectedPlan?.price || selectedPlan?.publicPrice);
-  const serviceFee = settings?.serviceFeeEnabled ? (settings?.serviceFee || 0) : 0;
+  // Service fee (₹599) applies to B2C individual applicants only — agents (B2B)
+  // are exempt since their margin is already built into agentPrice.
+  const serviceFee = !isAgent && settings?.serviceFeeEnabled ? (settings?.serviceFee || 0) : 0;
   const totalPrice = basePrice + serviceFee;
 
   const handleApply = async (e) => {
     e.preventDefault();
-    if (!user) { router.push('/auth/login'); return; }
+    // B2C (individual) applicants can apply without logging in — a guest
+    // account is created behind the scenes on submit. Agents (B2B) must
+    // already be logged in to reach agent pricing in the first place, since
+    // isAgent only becomes true from a real, authenticated agent session.
     if (!selectedPlan) { toast.error('Please select a plan'); return; }
+    
+    // Validate mandatory documents
+    if (!documents.frontPassport || !documents.backPassport || !documents.digitalPhoto) {
+      toast.error('Please upload all mandatory documents: Front Passport, Back Passport, and Digital Photo');
+      return;
+    }
+    
     if (selectedPlan.isContactUs) {
-      window.open(waApply({ visaCountry: visa.country, planLabel: selectedPlan.label, userName: user.name, email: user.email }), '_blank');
+      window.open(waApply({
+        visaCountry: visa.country, planLabel: selectedPlan.label,
+        userName: user?.name || `${form.firstName} ${form.lastName}`.trim(),
+        email: user?.email || form.applicantEmail,
+      }), '_blank');
       return;
     }
 
     setApplying(true);
     try {
-      const payload = {
-        visaId:     visa._id,
-        planLabel:  selectedPlan.label,
+      // Step 1: create the application from a plain JSON payload
+      const { data } = await appAPI.create({
+        visaId: visa._id,
+        planLabel: selectedPlan.label,
         paymentMethod,
-        ...form,
-      };
+        applicantName:  `${form.firstName} ${form.lastName}`.trim(),
+        applicantEmail: form.applicantEmail,
+        applicantPhone: form.applicantPhone,
+        passportNumber: form.passportNumber,
+        passportExpiry: form.passportExpiryDate,
+        nationality:    form.nationality,
+        dateOfBirth:    form.dateOfBirth,
+        travelDate:     form.travelDate,
+        returnDate:     form.returnDate,
+        purposeOfVisit: form.purposeOfVisit,
+        extra: { gender: form.gender, passportIssueDate: form.passportIssueDate },
+      });
+      const applicationId = data.data._id;
 
-      const { data } = await appAPI.create(payload);
+      // Guest (B2C, no-login) checkout — the backend auto-created/reused an
+      // account and issued a token. Sign the applicant in silently so the
+      // document upload below (and their dashboard afterwards) both work.
+      if (data.token && data.user) {
+        setAuth(data.token, { _id: data.user.id, ...data.user });
+      }
+
+      // Step 2: upload the mandatory + optional documents to the created application
+      const docEntries = [
+        ['frontPassport', documents.frontPassport],
+        ['backPassport', documents.backPassport],
+        ['digitalPhoto', documents.digitalPhoto],
+        ['optional1', documents.optional1],
+        ['optional2', documents.optional2],
+        ['optional3', documents.optional3],
+        ['optional4', documents.optional4],
+      ].filter(([, file]) => !!file);
+
+      if (docEntries.length) {
+        const docFormData = new FormData();
+        const docTypes = docEntries.map(([type]) => type);
+        docEntries.forEach(([, file]) => docFormData.append('documents', file));
+        docFormData.append('docTypes', JSON.stringify(docTypes));
+        try {
+          const uploadRes = await appAPI.uploadDocs(applicationId, docFormData);
+          const rejected = uploadRes.data?.rejected || [];
+          if (rejected.length) {
+            toast.error(`Some documents need to be re-uploaded: ${rejected.map(r => r.message).join(' ')}`, { duration: 8000 });
+          }
+        } catch (uploadErr) {
+          // Application itself was already created — surface the document failure
+          // separately so the applicant knows to go re-upload rather than assuming
+          // the whole submission failed.
+          toast.error(uploadErr.response?.data?.message || 'Documents could not be uploaded. Please re-upload them from your dashboard.', { duration: 8000 });
+        }
+      }
+
       toast.success('Application submitted successfully!');
 
       // If WhatsApp — open the WA link returned by backend
@@ -83,7 +179,7 @@ export default function VisaDetailPage() {
 
       // If Razorpay — redirect to payment page
       if (paymentMethod === 'razorpay') {
-        router.push(`/apply?appId=${data.data._id}&amount=${totalPrice}&country=${encodeURIComponent(visa.country)}`);
+        router.push(`/apply?appId=${applicationId}&amount=${totalPrice}&country=${encodeURIComponent(visa.country)}`);
         return;
       }
 
@@ -93,198 +189,511 @@ export default function VisaDetailPage() {
     } finally { setApplying(false); }
   };
 
+  // Handle auto-fill form from OCR
+  const handleOCRFormUpdate = (ocrData) => {
+    setForm(prev => ({
+      ...prev,
+      // Extraction uses surname/givenNames, matching the fields produced by
+      // PassportOCRService.parseMRZTD3 / parsePassportText — every field here
+      // stays editable, this is a pre-fill, not a lock.
+      firstName: ocrData.givenNames || prev.firstName,
+      lastName: ocrData.surname || prev.lastName,
+      passportNumber: ocrData.passportNumber || prev.passportNumber,
+      nationality: ocrData.nationality || prev.nationality,
+      dateOfBirth: ocrData.dateOfBirth || prev.dateOfBirth,
+      gender: ocrData.gender || prev.gender,
+      passportIssueDate: ocrData.dateOfIssue || prev.passportIssueDate,
+      passportExpiryDate: ocrData.dateOfExpiry || prev.passportExpiryDate,
+    }));
+    toast.success('Passport details extracted successfully.');
+  };
+
   if (loading) return <div className="pt-16"><Loading /></div>;
   if (!visa) return null;
 
   const hasRealPlans = visa.plans?.some(p => !p.isContactUs);
 
   return (
-    <div className="pt-16 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-primary to-secondary text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <Link href="/visa" className="inline-flex items-center gap-2 text-blue-200 hover:text-white text-sm mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> All Visas
+    <div className="min-h-screen bg-white">
+      {/* Premium Dark Hero Header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-[#061f3b] via-[#0d3b66] to-[#0B3C5D] text-white pt-20 pb-20">
+        <div className="absolute inset-0 opacity-20">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-[#3282B8] rounded-full filter blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-to-tr from-[#FF7A00] rounded-full filter blur-3xl"></div>
+        </div>
+        
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <Link href="/visa" className="inline-flex items-center gap-2 text-blue-200 hover:text-white text-sm mb-8 transition-colors group">
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" /> Back to Visas
           </Link>
-          <div className="flex items-center gap-5 flex-wrap">
-            <span className="text-6xl leading-none">{visa.flag}</span>
-            <div>
-              <div className="flex items-center gap-3 flex-wrap mb-1">
-                <h1 className="text-4xl font-extrabold">{visa.country} Visa</h1>
-                {visa.isRiskFree && <span className="badge bg-emerald-400/90 text-white">✓ Risk Free</span>}
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-start">
+            {/* Left: Flag & Title */}
+            <div className="md:col-span-2">
+              <div className="flex items-start gap-6 mb-8">
+                <span className="text-8xl leading-none">{visa.flag}</span>
+                <div>
+                  <h1 className="text-5xl font-black mb-3">{visa.country} Visa</h1>
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    {visa.isRiskFree && (
+                      <span className="inline-flex items-center gap-1.5 bg-emerald-500/90 text-white px-3 py-1.5 rounded-full text-sm font-bold">
+                        <Shield className="w-4 h-4" /> Risk Free
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-1.5 bg-white/20 text-white px-3 py-1.5 rounded-full text-sm font-semibold backdrop-blur-sm">
+                      <Zap className="w-4 h-4" /> {visa.visaType}
+                    </span>
+                  </div>
+                  <p className="text-blue-100 text-lg mb-4 max-w-2xl">{visa.description || 'Fast & reliable visa processing with expert support throughout your journey.'}</p>
+                </div>
               </div>
-              <div className="flex gap-5 text-blue-200 text-sm">
-                <span className="flex items-center gap-1"><Clock className="w-4 h-4" />{visa.processingTime}</span>
-                <span>{visa.visaType}</span>
+
+              {/* Key Stats Row */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white/10 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+                  <p className="text-blue-200 text-xs font-semibold uppercase tracking-wide">Processing Time</p>
+                  <p className="text-2xl font-bold mt-1 flex items-center gap-1"><Clock className="w-5 h-5" />{visa.processingTime}</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+                  <p className="text-blue-200 text-xs font-semibold uppercase tracking-wide">Validity</p>
+                  <p className="text-2xl font-bold mt-1">{visa.validity || '1 Year'}</p>
+                </div>
+                <div className="bg-white/10 backdrop-blur-md rounded-xl px-4 py-3 border border-white/20">
+                  <p className="text-blue-200 text-xs font-semibold uppercase tracking-wide">Stay Duration</p>
+                  <p className="text-2xl font-bold mt-1">{visa.stayDuration || '30 Days'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Quick Trust Box */}
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl px-6 py-6 border border-white/20 h-fit">
+              <p className="text-blue-200 text-xs font-bold uppercase tracking-widest mb-4">✓ Trusted by thousands</p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>Expert guidance included</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>Money-back guarantee</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                  <span>24/7 WhatsApp support</span>
+                </div>
+              </div>
+              <div className="mt-6 pt-4 border-t border-white/20">
+                <p className="text-xs text-blue-200">⭐ 4.9/5 rating • 2,400+ successful applications</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+      {/* Content Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* LEFT: Main Content Tabs */}
+          <div className="lg:col-span-2 space-y-8">
 
-          {/* LEFT col */}
-          <div className="lg:col-span-2 space-y-6">
+            {/* Tabs/Sections Navigation */}
+            <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-0">
+              {['overview', 'requirements', 'faqs', 'eligibility'].map((tab) => (
+                <button key={tab}
+                  onClick={() => setExpandedSection(expandedSection === tab ? null : tab)}
+                  className={`px-4 py-3 font-semibold text-sm whitespace-nowrap border-b-2 transition-all capitalize ${
+                    expandedSection === tab
+                      ? 'border-[#FF7A00] text-[#FF7A00]'
+                      : 'border-transparent text-gray-600 hover:text-gray-800'
+                  }`}>
+                  {tab}
+                </button>
+              ))}
+            </div>
 
-            {/* Plan selector */}
-            <div className="card">
-              <h2 className="text-xl font-bold text-primary mb-5">Select Your Plan</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {visa.plans?.map((p, i) => (
-                  <button key={i} onClick={() => !p.isContactUs && setSelectedPlan(p)}
-                    className={`p-4 rounded-xl border-2 text-left transition-all
-                      ${p.isContactUs ? 'border-dashed border-gray-200 cursor-default' : ''}
-                      ${!p.isContactUs && selectedPlan?.label === p.label
-                        ? 'border-cta bg-orange-50 shadow-sm'
-                        : !p.isContactUs ? 'border-gray-200 hover:border-secondary' : ''}`}>
-                    <p className="font-semibold text-gray-800 text-sm">{p.label}</p>
-                    {p.isContactUs
-                      ? <p className="text-gray-400 text-sm mt-1">Call / WhatsApp for price</p>
-                      : (
-                        <>
-                          <p className="text-2xl font-extrabold text-primary mt-1">
-                            ₹{(p.price || p.publicPrice || 0).toLocaleString('en-IN')}
-                          </p>
-                          {isAgent && p.profit > 0 && (
-                            <p className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-                              <TrendingUp className="w-3 h-3" />+₹{p.profit.toLocaleString('en-IN')} potential profit
-                            </p>
-                          )}
-                          {selectedPlan?.label === p.label && (
-                            <p className="text-cta text-xs font-bold mt-1">✓ Selected</p>
-                          )}
-                        </>
-                      )
-                    }
-                  </button>
-                ))}
+            {/* Overview Tab */}
+            {expandedSection === 'overview' || expandedSection === null && (
+              <div className="space-y-6 animate-in fade-in">
+                {/* Processing Timeline */}
+                <div className="soft-card">
+                  <h3 className="text-xl font-bold text-[#0B3C5D] mb-6 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-[#FF7A00]" /> How Long Does It Take?
+                  </h3>
+                  <div className="space-y-4">
+                    {[
+                      { step: 'Application Submission', days: '0-1' },
+                      { step: 'Document Verification', days: '1-3' },
+                      { step: 'Embassy Processing', days: `${visa.processingTime || '5-7 days'}` },
+                      { step: 'Visa Approval & Delivery', days: '1-2' },
+                    ].map((stage, idx) => (
+                      <div key={idx} className="flex gap-4">
+                        <div className="flex flex-col items-center">
+                          <div className="w-10 h-10 rounded-full bg-[#FF7A00] text-white flex items-center justify-center font-bold flex-shrink-0">{idx + 1}</div>
+                          {idx < 3 && <div className="w-0.5 h-8 bg-gradient-to-b from-[#FF7A00] to-gray-200 mt-2"></div>}
+                        </div>
+                        <div className="pb-4">
+                          <p className="font-semibold text-gray-800">{stage.step}</p>
+                          <p className="text-sm text-gray-500 mt-0.5">{stage.days}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Country Overview */}
+                <div className="soft-card">
+                  <h3 className="text-xl font-bold text-[#0B3C5D] mb-4 flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-[#FF7A00]" /> About This Visa
+                  </h3>
+                  <p className="text-gray-700 leading-relaxed mb-4">
+                    {visa.description || `Get your ${visa.country} visa quickly with our expert assistance. Our team handles all documentation and communication with the embassy to ensure smooth visa approval.`}
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-transparent rounded-lg p-4 border border-blue-100">
+                      <p className="text-xs text-gray-600 font-semibold uppercase">Entry Type</p>
+                      <p className="text-lg font-bold text-[#0B3C5D] mt-1">{visa.visaType || 'Single Entry'}</p>
+                    </div>
+                    <div className="bg-gradient-to-br from-green-50 to-transparent rounded-lg p-4 border border-green-100">
+                      <p className="text-xs text-gray-600 font-semibold uppercase">Cost Range</p>
+                      <p className="text-lg font-bold text-[#0B3C5D] mt-1">₹{Math.min(...(visa.plans?.map(p => p.price || p.publicPrice) || [999])).toLocaleString('en-IN')} - ₹{Math.max(...(visa.plans?.map(p => p.price || p.publicPrice) || [999])).toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Requirements */}
-            <div className="card">
-              <h2 className="text-xl font-bold text-primary mb-4">Documents Required</h2>
-              <ul className="space-y-2.5">
-                {(visa.requirements?.length ? visa.requirements : ['Valid passport (6+ months validity)', 'Passport size photo (white background)', 'Return flight ticket', 'Hotel booking']).map((r, i) => (
-                  <li key={i} className="flex items-start gap-3 text-gray-700 text-sm">
-                    <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />{r}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* FAQs */}
-            {visa.faqs?.length > 0 && (
-              <div className="card">
-                <h2 className="text-xl font-bold text-primary mb-4">Frequently Asked Questions</h2>
-                <div className="space-y-2">
-                  {visa.faqs.map((f, i) => (
-                    <div key={i} className="border border-gray-100 rounded-xl overflow-hidden">
-                      <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                        className="w-full flex justify-between items-center px-4 py-3 text-left font-semibold text-gray-800 text-sm hover:bg-gray-50 transition-colors">
-                        {f.question}
-                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2 ${openFaq === i ? 'rotate-180' : ''}`} />
-                      </button>
-                      {openFaq === i && (
-                        <div className="px-4 pb-4 text-gray-600 text-sm leading-relaxed">{f.answer}</div>
-                      )}
+            {/* Requirements Tab */}
+            {expandedSection === 'requirements' && (
+              <div className="soft-card animate-in fade-in">
+                <h3 className="text-xl font-bold text-[#0B3C5D] mb-6 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#FF7A00]" /> Documents Required
+                </h3>
+                <div className="space-y-3">
+                  {(visa.requirements?.length ? visa.requirements : ['Valid passport (6+ months validity)', 'Passport size photo (white background)', 'Return flight ticket', 'Hotel booking', 'Bank statements (last 3-6 months)', 'Employment letter from employer']).map((r, i) => (
+                    <div key={i} className="flex items-start gap-4 p-4 rounded-lg bg-gradient-to-r from-emerald-50 to-transparent border border-emerald-100 hover:shadow-sm transition-shadow">
+                      <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-gray-700 font-medium">{r}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-          </div>
 
-          {/* RIGHT col — sticky apply form */}
-          <div>
-            <div className="card sticky top-24">
-              <h2 className="text-lg font-bold text-primary mb-1">Apply Now</h2>
-
-              {selectedPlan && !selectedPlan.isContactUs && (
-                <div className="mb-4">
-                  <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Visa Fee:</span>
-                      <span className="font-semibold">₹{basePrice?.toLocaleString('en-IN')}</span>
-                    </div>
-                    {serviceFee > 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">{settings?.serviceFeeLabel || 'Service Fee'}:</span>
-                        <span className="font-semibold">₹{serviceFee.toLocaleString('en-IN')}</span>
-                      </div>
+            {/* FAQs Tab */}
+            {expandedSection === 'faqs' && visa.faqs?.length > 0 && (
+              <div className="space-y-3 animate-in fade-in">
+                <h3 className="text-xl font-bold text-[#0B3C5D] mb-6">Frequently Asked Questions</h3>
+                {visa.faqs.map((f, i) => (
+                  <div key={i} className="soft-card overflow-hidden">
+                    <button onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                      className="w-full flex justify-between items-start px-6 py-4 text-left hover:bg-gradient-to-r hover:from-orange-50 hover:to-transparent transition-all group">
+                      <span className="font-semibold text-gray-800 flex-1">{f.question}</span>
+                      <ChevronDown className={`w-5 h-5 text-[#FF7A00] flex-shrink-0 ml-3 transition-transform duration-300 group-hover:text-[#FF7A00] ${openFaq === i ? 'rotate-180' : ''}`} />
+                    </button>
+                    {openFaq === i && (
+                      <div className="px-6 pb-4 text-gray-600 leading-relaxed border-t border-gray-100 text-sm">{f.answer}</div>
                     )}
-                    <div className="border-t border-gray-200 pt-2 flex justify-between">
-                      <span className="font-semibold text-primary">Total:</span>
-                      <span className="text-2xl font-extrabold text-cta">₹{totalPrice?.toLocaleString('en-IN')}</span>
-                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2 text-center">· {selectedPlan.label}</p>
-                  {isAgent && selectedPlan.profit > 0 && (
-                    <p className="text-xs text-emerald-600 font-semibold mt-1 text-center flex items-center justify-center gap-1">
-                      <TrendingUp className="w-3 h-3" /> Profit: ₹{selectedPlan.profit.toLocaleString('en-IN')}
-                    </p>
+                ))}
+              </div>
+            )}
+
+            {/* Eligibility Tab */}
+            {expandedSection === 'eligibility' && (
+              <div className="soft-card animate-in fade-in">
+                <h3 className="text-xl font-bold text-[#0B3C5D] mb-6 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#FF7A00]" /> Eligibility Criteria
+                </h3>
+                <div className="space-y-4">
+                  {[
+                    'Valid passport with at least 6 months validity',
+                    'Stable employment or proof of income',
+                    'Clear criminal record',
+                    'Genuine purpose of travel',
+                    'Sufficient financial means for the trip',
+                    'No previous visa rejections',
+                  ].map((criterion, idx) => (
+                    <div key={idx} className="flex gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                      <CheckCircle className="w-5 h-5 text-[#0B3C5D] flex-shrink-0 mt-0.5" />
+                      <span className="text-gray-700">{criterion}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pricing Plans Section - Always Visible */}
+            <div className="soft-card">
+              <h3 className="text-2xl font-bold text-[#0B3C5D] mb-8">Choose Your Plan</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {visa.plans?.map((p, i) => (
+                  <button key={i} onClick={() => !p.isContactUs && setSelectedPlan(p)}
+                    className={`text-left p-6 rounded-2xl border-2 transition-all duration-300 ${
+                      p.isContactUs
+                        ? 'border-dashed border-gray-300 cursor-default bg-gray-50'
+                        : selectedPlan?.label === p.label
+                        ? 'border-[#FF7A00] bg-gradient-to-br from-orange-50 to-white shadow-lg'
+                        : 'border-gray-200 hover:border-[#FF7A00] hover:shadow-md'
+                    }`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <p className="font-bold text-gray-800 text-lg">{p.label}</p>
+                      {selectedPlan?.label === p.label && !p.isContactUs && (
+                        <span className="bg-[#FF7A00] text-white px-2 py-0.5 rounded-full text-xs font-bold">✓ Selected</span>
+                      )}
+                    </div>
+                    
+                    {p.isContactUs ? (
+                      <p className="text-gray-500 text-sm">Contact us for custom pricing</p>
+                    ) : (
+                      <>
+                        <p className="text-3xl font-black text-[#0B3C5D] mb-2">
+                          ₹{(p.price || p.publicPrice || 0).toLocaleString('en-IN')}
+                        </p>
+                        {isAgent && p.profit > 0 && (
+                          <p className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                            <TrendingUp className="w-3 h-3" />Profit: ₹{p.profit.toLocaleString('en-IN')}
+                          </p>
+                        )}
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <p className="text-xs text-gray-600 font-semibold mb-2 uppercase tracking-wide">Includes:</p>
+                          <ul className="space-y-1">
+                            {['Document review', 'Embassy communication', '24/7 support'].map((inc, idx) => (
+                              <li key={idx} className="text-xs text-gray-700 flex items-center gap-2">
+                                <CheckCircle className="w-3 h-3 text-emerald-500" /> {inc}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div>
+            <div className="soft-card lg:sticky lg:top-24 shadow-xl">
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h2 className="text-2xl font-black text-[#0B3C5D] mb-1">Ready to Apply?</h2>
+                <p className="text-sm text-gray-600">Join 10,000+ happy travelers</p>
+              </div>
+
+              {user && (
+                <ApplyStepper
+                  activeIndex={
+                    !(form.firstName && form.lastName && form.passportNumber && form.applicantEmail && form.applicantPhone) ? 0
+                    : !(documents.frontPassport && documents.backPassport && documents.digitalPhoto) ? 1
+                    : 2
+                  }
+                  steps={[
+                    { label: 'Details', complete: !!(form.firstName && form.lastName && form.passportNumber && form.applicantEmail && form.applicantPhone) },
+                    { label: 'Documents', complete: !!(documents.frontPassport && documents.backPassport && documents.digitalPhoto) },
+                    { label: 'Submit', complete: false },
+                  ]}
+                />
+              )}
+
+              {/* Price Summary */}
+              {selectedPlan && !selectedPlan.isContactUs && (
+                <div className="mb-6 bg-gradient-to-br from-blue-50 to-orange-50 rounded-xl p-4 border border-blue-100 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-700 text-sm font-semibold">Visa Fee:</span>
+                    <span className="font-bold text-gray-900">₹{(selectedPlan.price || selectedPlan.publicPrice || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                  {serviceFee > 0 && (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700">Service Fee:</span>
+                      <span className="font-semibold text-gray-900">₹{serviceFee.toLocaleString('en-IN')}</span>
+                    </div>
                   )}
+                  <div className="border-t border-gray-200 pt-2 flex justify-between items-center">
+                    <span className="font-bold text-[#0B3C5D]">Total Cost:</span>
+                    <span className="text-3xl font-black text-[#FF7A00]">₹{((selectedPlan.price || selectedPlan.publicPrice || 0) + serviceFee).toLocaleString('en-IN')}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 pt-2 text-center">Plan: <span className="font-semibold text-gray-700">{selectedPlan.label}</span></p>
                 </div>
               )}
 
-              {user ? (
-                <form onSubmit={handleApply} className="space-y-3">
-                  {[
-                    ['applicantName',  'Full Name',       'text',  true],
-                    ['applicantEmail', 'Email',           'email', true],
-                    ['applicantPhone', 'Phone Number',    'tel',   true],
-                    ['passportNumber', 'Passport Number', 'text',  false],
-                    ['nationality',   'Nationality',     'text',  false],
-                    ['travelDate',    'Travel Date',     'date',  false],
-                    ['returnDate',    'Return Date',     'date',  false],
-                  ].map(([field, label, type, req]) => (
-                    <div key={field}>
-                      <label className="text-xs font-semibold text-gray-600 block mb-1">{label}{req && ' *'}</label>
-                      <input type={type} required={req}
-                        value={form[field]} onChange={e => setForm({ ...form, [field]: e.target.value })}
-                        className="input-field text-sm" />
-                    </div>
-                  ))}
-
-                  {/* Payment method */}
-                  {hasRealPlans && selectedPlan && !selectedPlan.isContactUs && (
+              {/* Apply Form — B2C applicants don't need to log in; an account
+                  is created automatically on submit so they can track their
+                  application afterwards. Agents (B2B) must log in first to
+                  see agent pricing. */}
+              {!user && (
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs">
+                  <span className="text-blue-800">Applying as a guest — no login needed. We'll set up an account with your email so you can track this application.</span>
+                  <Link href="/auth/login" className="whitespace-nowrap font-bold text-primary hover:underline">Agent? Login</Link>
+                </div>
+              )}
+              <form onSubmit={handleApply} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs font-semibold text-gray-600 block mb-2">Payment Method</label>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">First Name *</label>
+                      <input type="text" required
+                        value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })}
+                        className="input-field text-sm w-full" placeholder="John" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Last Name *</label>
+                      <input type="text" required
+                        value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })}
+                        className="input-field text-sm w-full" placeholder="Doe" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Passport No. *</label>
+                      <input type="text" required
+                        value={form.passportNumber} onChange={e => setForm({ ...form, passportNumber: e.target.value })}
+                        className="input-field text-sm w-full" placeholder="AB1234567" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Nationality *</label>
+                      <CountrySelect required value={form.nationality}
+                        onChange={v => setForm({ ...form, nationality: v })}
+                        placeholder="Select nationality" />
+                    </div>
+                  </div>
+
+                  {/* SECTION: Passport Details (auto-filled by OCR, stays editable) */}
+                  <div className="pt-3 border-t border-gray-300 mt-4">
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">📖 Passport Details</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Date of Birth *</label>
+                        <input type="date" required
+                          value={form.dateOfBirth} onChange={e => setForm({ ...form, dateOfBirth: e.target.value })}
+                          className="input-field text-sm w-full" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Gender *</label>
+                        <select required
+                          value={form.gender} onChange={e => setForm({ ...form, gender: e.target.value })}
+                          className="input-field text-sm w-full">
+                          <option value="">Select Gender</option>
+                          <option value="Male">Male</option>
+                          <option value="Female">Female</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Passport Issue Date</label>
+                        <input type="date"
+                          value={form.passportIssueDate} onChange={e => setForm({ ...form, passportIssueDate: e.target.value })}
+                          className="input-field text-sm w-full" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Expiry Date</label>
+                        <input type="date"
+                          value={form.passportExpiryDate} onChange={e => setForm({ ...form, passportExpiryDate: e.target.value })}
+                          className="input-field text-sm w-full" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION: Travel Information */}
+                  <div className="pt-3 border-t border-gray-300 mt-4">
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">✈️ Travel Information</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Travel Date *</label>
+                        <input type="date" required
+                          value={form.travelDate} onChange={e => setForm({ ...form, travelDate: e.target.value })}
+                          className="input-field text-sm w-full" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Return Date *</label>
+                        <input type="date" required
+                          value={form.returnDate} onChange={e => setForm({ ...form, returnDate: e.target.value })}
+                          className="input-field text-sm w-full" />
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Purpose of Visit *</label>
+                      <select required
+                        value={form.purposeOfVisit} onChange={e => setForm({ ...form, purposeOfVisit: e.target.value })}
+                        className="input-field text-sm w-full">
+                        <option value="Tourism">Tourism</option>
+                        <option value="Business">Business</option>
+                        <option value="Study">Study</option>
+                        <option value="Work">Work</option>
+                        <option value="Medical">Medical</option>
+                        <option value="Visit Family">Visit Family</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* SECTION: Contact Details */}
+                  <div className="pt-3 border-t border-gray-300 mt-4">
+                    <h4 className="text-sm font-bold text-gray-900 mb-3">📞 Contact Details</h4>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Email *</label>
+                        <input type="email" required
+                          value={form.applicantEmail} onChange={e => setForm({ ...form, applicantEmail: e.target.value })}
+                          className="input-field text-sm w-full" placeholder="john@example.com" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Phone *</label>
+                        <input type="tel" required
+                          value={form.applicantPhone} onChange={e => setForm({ ...form, applicantPhone: e.target.value })}
+                          className="input-field text-sm w-full" placeholder="+91 98765 43210" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Document Upload Section */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <label className="text-sm font-bold text-gray-900 uppercase tracking-wide block mb-3">📄 Upload Documents</label>
+                    <p className="text-xs text-red-600 mb-3">Front Passport, Back Passport and Digital Photo are mandatory.</p>
+                    <DocumentUpload
+                      onDocumentsChange={setDocuments}
+                      onPassportExtracted={handleOCRFormUpdate}
+                    />
+                    <p className="text-xs text-gray-500 mt-2">Supported formats: JPG, PNG, PDF (Max 5MB each)</p>
+                  </div>
+
+                  {/* Validation: Check Mandatory Documents */}
+                  {!documents.frontPassport || !documents.backPassport || !documents.digitalPhoto ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                      <span className="font-bold">⚠️ Mandatory Documents:</span> Please upload Front Passport, Back Passport, and Digital Photo to proceed.
+                    </div>
+                  ) : null}
+
+                  {/* Payment Method */}
+                  {hasRealPlans && selectedPlan && !selectedPlan.isContactUs && (
+                    <div className="pt-3">
+                      <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block mb-2">Payment Method</label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           ['whatsapp', '💬 WhatsApp'],
-                          ...(isAgent ? [['wallet', '👛 Wallet']] : [['razorpay', '💳 Pay Online']]),
+                          ...(isAgent ? [['wallet', '👛 Wallet']] : [['razorpay', '💳 Card']]),
                         ].map(([val, label]) => (
                           <button key={val} type="button" onClick={() => setPaymentMethod(val)}
-                            className={`py-2 rounded-xl text-xs font-semibold border-2 transition-all ${paymentMethod === val ? 'border-primary bg-primary text-white' : 'border-gray-200 text-gray-600 hover:border-primary'}`}>
+                            className={`py-2 px-2 rounded-lg text-xs font-bold border-2 transition-all text-center ${
+                              paymentMethod === val
+                                ? 'border-[#FF7A00] bg-[#FF7A00] text-white'
+                                : 'border-gray-200 text-gray-700 hover:border-[#FF7A00]'
+                            }`}>
                             {label}
                           </button>
                         ))}
                       </div>
-                      {isAgent && paymentMethod === 'wallet' && (
-                        <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 rounded-lg px-2 py-1.5">
-                          ₹{price?.toLocaleString('en-IN')} will be deducted from your wallet balance: ₹{user.walletBalance?.toLocaleString('en-IN')}
-                        </p>
-                      )}
                     </div>
                   )}
 
-                  <button type="submit" disabled={applying}
-                    className="btn-primary w-full justify-center py-3 disabled:opacity-60 disabled:cursor-not-allowed">
-                    {applying ? 'Submitting...' : selectedPlan?.isContactUs ? 'Contact via WhatsApp' : 'Submit Application'}
+                  <button type="submit" disabled={applying || !selectedPlan || !documents.frontPassport || !documents.backPassport || !documents.digitalPhoto}
+                    className="w-full bg-gradient-to-r from-[#061f3b] to-[#0d3b66] hover:from-[#0d3b66] hover:to-[#0B3C5D] text-white font-bold py-3 px-4 rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-lg mt-6">
+                    {applying ? 'Submitting...' : selectedPlan?.isContactUs ? 'Contact via WhatsApp' : '✓ Submit Application'}
                   </button>
                 </form>
-              ) : (
-                <div className="text-center py-4">
-                  <p className="text-gray-500 text-sm mb-4">Login to apply online or track your application</p>
-                  <Link href="/auth/login" className="btn-secondary w-full justify-center">Login to Apply</Link>
-                </div>
-              )}
 
-              {/* Always-visible WA button */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
+              {/* WhatsApp CTA */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
                 <a href={waApply({
                     visaCountry: visa.country,
                     planLabel: selectedPlan?.label,
@@ -293,14 +702,14 @@ export default function VisaDetailPage() {
                     travelDate: form.travelDate,
                   })}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-green-500 hover:bg-green-600 text-white rounded-xl py-3 font-semibold transition-all text-sm">
-                  <MessageCircle className="w-4 h-4" /> Apply via WhatsApp
+                  className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold py-3 px-4 rounded-xl transition-all">
+                  <MessageCircle className="w-5 h-5" /> Chat on WhatsApp
                 </a>
-                <p className="text-center text-xs text-gray-400 mt-2">Instant reply · 24/7 support</p>
+                <p className="text-center text-xs text-gray-500 mt-3">Instant reply • Expert guidance • No spam</p>
               </div>
+
             </div>
           </div>
-
         </div>
       </div>
     </div>
