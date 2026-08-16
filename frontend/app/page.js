@@ -21,7 +21,9 @@ import {
 } from 'lucide-react';
 import { visaAPI } from '../lib/api';
 import { waGeneral } from '../lib/whatsapp';
+import { getUser, dashboardPath } from '../lib/auth';
 import VisaCard from '../components/visa/VisaCard';
+import LoginBox from '../components/layout/LoginBox';
 
 const POPULAR_SLUGS = ['dubai', 'oman', 'qatar', 'bahrain', 'jordan', 'egypt', 'vietnam', 'singapore', 'sri-lanka', 'malaysia'];
 
@@ -49,6 +51,9 @@ export default function HomePage() {
   const [visas, setVisas] = useState([]);
   const [popular, setPopular] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+
+  useEffect(() => { setUser(getUser()); }, []);
 
   useEffect(() => {
     visaAPI.getAll()
@@ -140,7 +145,19 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative space-y-6">
+              {user ? (
+                <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 flex items-center justify-between gap-4">
+                  <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
+                  <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+                    Dashboard <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              ) : (
+                <LoginBox onSuccess={setUser} />
+              )}
+
+              <div className="relative">
               <div className="floating-card">
                 <div className="flex items-center justify-between">
                   <div>
@@ -171,11 +188,12 @@ export default function HomePage() {
                 </div>
               </div>
 
-              <div className="absolute -left-5 top-8 hidden rounded-2xl border border-white/10 bg-sky-500/15 px-4 py-3 shadow-xl backdrop-blur md:block">
+              <div className="absolute -left-5 -top-5 hidden rounded-2xl border border-white/10 bg-sky-500/15 px-4 py-3 shadow-xl backdrop-blur md:block">
                 <div className="flex items-center gap-2 text-sm text-white">
                   <BadgeCheck className="h-4 w-4 text-orange-400" />
                   Visa experts available 24/7
                 </div>
+              </div>
               </div>
             </div>
           </div>
