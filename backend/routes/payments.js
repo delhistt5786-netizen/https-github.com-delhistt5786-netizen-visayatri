@@ -120,7 +120,10 @@ router.post('/verify', protect, async (req, res) => {
       .update(body)
       .digest('hex');
 
-    if (expected !== razorpay_signature) {
+    const signatureValid = expected.length === razorpay_signature.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(razorpay_signature));
+
+    if (!signatureValid) {
       // Mark payment as failed
       await Payment.findOneAndUpdate(
         { razorpayOrderId: razorpay_order_id },
@@ -196,7 +199,9 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     const body      = Buffer.isBuffer(req.body) ? req.body.toString() : JSON.stringify(req.body);
     const expected  = crypto.createHmac('sha256', secret).update(body).digest('hex');
 
-    if (sig !== expected) return res.status(400).send('Invalid signature');
+    const signatureValid = typeof sig === 'string' && sig.length === expected.length &&
+      crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+    if (!signatureValid) return res.status(400).send('Invalid signature');
 
     const event = JSON.parse(body);
     if (event.event === 'payment.captured') {

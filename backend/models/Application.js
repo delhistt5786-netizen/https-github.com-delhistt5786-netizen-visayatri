@@ -83,7 +83,7 @@ const applicationSchema = new mongoose.Schema({
   razorpayOrderId:   { type: String },
   razorpayPaymentId: { type: String },
   amountPaid:        { type: Number, default: 0 },
-  transactionId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction' },
+  transactionId:     { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
 
   // ── Commission ─────────────────────────────────────────
   commissionAmount: { type: Number, default: 0 },
