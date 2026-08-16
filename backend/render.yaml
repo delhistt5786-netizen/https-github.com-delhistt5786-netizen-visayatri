@@ -17,5 +17,23 @@ services:
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
       - key: FRONTEND_URL
+        sync: false
+      - key: WHATSAPP_NUMBER
+        sync: false
+      - key: BRAND_EMAIL
+        sync: false
+      - key: BRAND_NAME
+        sync: false
+      # Optional — email notifications (visa-ready / docs-requested) are
+      # skipped gracefully if these are left unset.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
         sync: false
