@@ -88,6 +88,22 @@ export default function HomePage() {
                 Trusted by 10,000+ travelers across India
               </div>
 
+              {/* Login box — shown here (above the fold) on narrower screens where
+                  the two-column layout below hasn't kicked in yet; hidden at lg+
+                  since it already renders in the right column there. */}
+              <div className="mb-8 max-w-sm lg:hidden">
+                {user ? (
+                  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 flex items-center justify-between gap-4">
+                    <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
+                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+                      Dashboard <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                ) : (
+                  <LoginBox onSuccess={setUser} />
+                )}
+              </div>
+
               <h1 className="max-w-xl text-4xl font-black tracking-[-0.06em] text-white md:text-6xl">
                 Fast visa approvals
                 <span className="mt-2 block text-orange-400">without the stress.</span>
@@ -146,16 +162,18 @@ export default function HomePage() {
             </div>
 
             <div className="relative space-y-6">
-              {user ? (
-                <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 flex items-center justify-between gap-4">
-                  <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
-                  <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-                    Dashboard <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </div>
-              ) : (
-                <LoginBox onSuccess={setUser} />
-              )}
+              <div className="hidden lg:block">
+                {user ? (
+                  <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 flex items-center justify-between gap-4">
+                    <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
+                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
+                      Dashboard <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                ) : (
+                  <LoginBox onSuccess={setUser} />
+                )}
+              </div>
 
               <div className="relative">
               <div className="floating-card">
