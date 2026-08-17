@@ -91,16 +91,16 @@ export default function HomePage() {
               {/* Login box — shown here (above the fold) on narrower screens where
                   the two-column layout below hasn't kicked in yet; hidden at lg+
                   since it already renders in the right column there. */}
-              <div className="mb-8 max-w-sm lg:hidden">
+              <div className="mb-6 max-w-xs lg:hidden">
                 {user ? (
-                  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-5 flex items-center justify-between gap-4">
-                    <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
-                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-                      Dashboard <ArrowRight className="h-4 w-4" />
+                  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
+                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">
+                      Dashboard <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
                 ) : (
-                  <LoginBox onSuccess={setUser} />
+                  <LoginBox onSuccess={setUser} compact />
                 )}
               </div>
 
@@ -161,17 +161,17 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative space-y-6">
-              <div className="hidden lg:block">
+            <div className="relative space-y-4">
+              <div className="hidden lg:block max-w-xs ml-auto">
                 {user ? (
-                  <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 flex items-center justify-between gap-4">
-                    <p className="text-sm text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
-                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-2 text-sm font-bold text-white bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-xl transition-colors whitespace-nowrap">
-                      Dashboard <ArrowRight className="h-4 w-4" />
+                  <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 flex items-center justify-between gap-3">
+                    <p className="text-xs text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
+                    <Link href={dashboardPath(user.role)} className="inline-flex items-center gap-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-xl transition-colors whitespace-nowrap">
+                      Dashboard <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </div>
                 ) : (
-                  <LoginBox onSuccess={setUser} />
+                  <LoginBox onSuccess={setUser} compact />
                 )}
               </div>
 
