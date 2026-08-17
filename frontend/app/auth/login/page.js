@@ -1,11 +1,27 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, CheckCircle, Shield, Zap, ArrowRight } from 'lucide-react';
 import { authAPI } from '../../../lib/api';
 import { setAuth } from '../../../lib/auth';
 import toast from 'react-hot-toast';
+
+// lib/api.js hard-redirects here with ?expired=1 when a stored session
+// token is rejected by the backend (expired, or invalid — e.g. signed
+// under a JWT_SECRET the server no longer recognizes). Without this the
+// user just sees the page reload back to login with no explanation.
+// useSearchParams() needs its own Suspense boundary or the whole page
+// deopts out of static rendering.
+function ExpiredSessionNotice() {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('expired')) {
+      toast.error('Your session expired. Please log in again.');
+    }
+  }, [searchParams]);
+  return null;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,6 +45,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen pt-16 bg-gradient-to-br from-[#061f3b] via-[#0d3b66] to-[#0B3C5D] relative overflow-hidden">
+      <Suspense fallback={null}><ExpiredSessionNotice /></Suspense>
       {/* Decorative gradient orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-to-bl from-[#3282B8] rounded-full filter blur-3xl opacity-20"></div>
