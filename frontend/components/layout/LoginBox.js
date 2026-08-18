@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, X } from 'lucide-react';
 import { authAPI } from '../../lib/api';
 import { setAuth, dashboardPath } from '../../lib/auth';
-import { waForgotPassword } from '../../lib/whatsapp';
 import toast from 'react-hot-toast';
 
 export default function LoginBox({ onSuccess, onClose, compact = false }) {
@@ -12,6 +11,12 @@ export default function LoginBox({ onSuccess, onClose, compact = false }) {
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // 'login' | 'forgot' | 'sent' — "Forgot Password?" swaps this box into an
+  // email-only form that emails a reset link, instead of opening WhatsApp.
+  const [mode, setMode] = useState('login');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,6 +30,17 @@ export default function LoginBox({ onSuccess, onClose, compact = false }) {
     } catch (err) {
       toast.error(err.response?.data?.message || 'Login failed');
     } finally { setLoading(false); }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setResetLoading(true);
+    try {
+      await authAPI.forgotPassword(resetEmail);
+      setMode('sent');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Could not send reset link');
+    } finally { setResetLoading(false); }
   };
 
   return (
@@ -42,37 +58,78 @@ export default function LoginBox({ onSuccess, onClose, compact = false }) {
           </button>
         )}
 
-        <h2 className={`font-serif font-bold text-[#FF7A00] text-center ${compact ? 'text-xl mb-1' : 'text-3xl mb-2'}`}>Login</h2>
-        {!compact && <p className="text-white/80 text-sm text-center mb-5">Login with your credentials.</p>}
-        <div className={`border-t border-white/20 ${compact ? 'mb-3' : 'mb-6'}`}></div>
+        {mode === 'login' && (
+          <>
+            <h2 className={`font-serif font-bold text-[#FF7A00] text-center ${compact ? 'text-xl mb-1' : 'text-3xl mb-2'}`}>Login</h2>
+            {!compact && <p className="text-white/80 text-sm text-center mb-5">Login with your credentials.</p>}
+            <div className={`border-t border-white/20 ${compact ? 'mb-3' : 'mb-6'}`}></div>
 
-        <form onSubmit={handleSubmit} className={compact ? 'space-y-2.5' : 'space-y-4'}>
-          <input type="text" required placeholder="Email ID / Mobile No" value={form.email}
-            onChange={e => setForm({...form, email: e.target.value})}
-            className={`w-full rounded-full bg-transparent border border-white/40 text-white placeholder-white/60 text-sm focus:outline-none focus:border-[#FF7A00] transition-colors ${compact ? 'px-4 py-2' : 'px-5 py-3'}`} />
+            <form onSubmit={handleSubmit} className={compact ? 'space-y-2.5' : 'space-y-4'}>
+              <input type="text" required placeholder="Email ID / Mobile No" value={form.email}
+                onChange={e => setForm({...form, email: e.target.value})}
+                className={`w-full rounded-full bg-transparent border border-white/40 text-white placeholder-white/60 text-sm focus:outline-none focus:border-[#FF7A00] transition-colors ${compact ? 'px-4 py-2' : 'px-5 py-3'}`} />
 
-          <div className="relative">
-            <input type={showPass ? 'text' : 'password'} required placeholder="Password" value={form.password}
-              onChange={e => setForm({...form, password: e.target.value})}
-              className={`w-full pr-11 rounded-full bg-transparent border border-white/40 text-white placeholder-white/60 text-sm focus:outline-none focus:border-[#FF7A00] transition-colors ${compact ? 'px-4 py-2' : 'px-5 py-3'}`} />
-            <button type="button" onClick={() => setShowPass(!showPass)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#FF7A00] hover:text-orange-400">
-              {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <div className="relative">
+                <input type={showPass ? 'text' : 'password'} required placeholder="Password" value={form.password}
+                  onChange={e => setForm({...form, password: e.target.value})}
+                  className={`w-full pr-11 rounded-full bg-transparent border border-white/40 text-white placeholder-white/60 text-sm focus:outline-none focus:border-[#FF7A00] transition-colors ${compact ? 'px-4 py-2' : 'px-5 py-3'}`} />
+                <button type="button" onClick={() => setShowPass(!showPass)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#FF7A00] hover:text-orange-400">
+                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <button type="submit" disabled={loading}
+                className={`w-full rounded-full bg-[#FF7A00] hover:bg-orange-600 text-white font-bold transition-all disabled:opacity-60 ${compact ? 'py-2 text-sm' : 'py-3'}`}>
+                {loading ? 'Logging in…' : 'Login'}
+              </button>
+            </form>
+
+            <div className={`text-center ${compact ? 'mt-2' : 'mt-4'}`}>
+              <button type="button" onClick={() => setMode('forgot')}
+                className={`text-white underline hover:text-[#FF7A00] transition-colors ${compact ? 'text-xs' : 'text-sm'}`}>
+                Forgot Password?
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'forgot' && (
+          <>
+            <h2 className={`font-serif font-bold text-[#FF7A00] text-center ${compact ? 'text-xl mb-1' : 'text-3xl mb-2'}`}>Reset Password</h2>
+            {!compact && <p className="text-white/80 text-sm text-center mb-5">Enter your email and we'll send you a reset link.</p>}
+            <div className={`border-t border-white/20 ${compact ? 'mb-3' : 'mb-6'}`}></div>
+
+            <form onSubmit={handleForgotSubmit} className={compact ? 'space-y-2.5' : 'space-y-4'}>
+              <input type="email" required placeholder="Your email address" value={resetEmail}
+                onChange={e => setResetEmail(e.target.value)}
+                className={`w-full rounded-full bg-transparent border border-white/40 text-white placeholder-white/60 text-sm focus:outline-none focus:border-[#FF7A00] transition-colors ${compact ? 'px-4 py-2' : 'px-5 py-3'}`} />
+
+              <button type="submit" disabled={resetLoading}
+                className={`w-full rounded-full bg-[#FF7A00] hover:bg-orange-600 text-white font-bold transition-all disabled:opacity-60 ${compact ? 'py-2 text-sm' : 'py-3'}`}>
+                {resetLoading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+            </form>
+
+            <div className={`text-center ${compact ? 'mt-2' : 'mt-4'}`}>
+              <button type="button" onClick={() => setMode('login')}
+                className={`text-white underline hover:text-[#FF7A00] transition-colors ${compact ? 'text-xs' : 'text-sm'}`}>
+                Back to Login
+              </button>
+            </div>
+          </>
+        )}
+
+        {mode === 'sent' && (
+          <div className="text-center py-4">
+            <h2 className={`font-serif font-bold text-[#FF7A00] ${compact ? 'text-lg mb-2' : 'text-2xl mb-3'}`}>Check your email</h2>
+            <p className="text-white/80 text-sm">If an account exists for that email, a password reset link is on its way. It expires in 1 hour.</p>
+            <button type="button" onClick={() => setMode('login')}
+              className={`mt-4 text-white underline hover:text-[#FF7A00] transition-colors ${compact ? 'text-xs' : 'text-sm'}`}>
+              Back to Login
             </button>
           </div>
-
-          <button type="submit" disabled={loading}
-            className={`w-full rounded-full bg-[#FF7A00] hover:bg-orange-600 text-white font-bold transition-all disabled:opacity-60 ${compact ? 'py-2 text-sm' : 'py-3'}`}>
-            {loading ? 'Logging in…' : 'Login'}
-          </button>
-        </form>
-
-        <div className={`text-center ${compact ? 'mt-2' : 'mt-4'}`}>
-          <a href={waForgotPassword()} target="_blank" rel="noopener noreferrer"
-            className={`text-white underline hover:text-[#FF7A00] transition-colors ${compact ? 'text-xs' : 'text-sm'}`}>
-            Forgot Password?
-          </a>
-        </div>
+        )}
       </div>
     </div>
   );

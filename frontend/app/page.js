@@ -52,6 +52,8 @@ export default function HomePage() {
   const [popular, setPopular] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroPaused, setHeroPaused] = useState(false);
 
   useEffect(() => { setUser(getUser()); }, []);
 
@@ -66,9 +68,18 @@ export default function HomePage() {
       .catch(() => setLoading(false));
   }, []);
 
+  // Rotate the "Popular destination" card through the popular list so the
+  // eligibility link always points at whichever country is on screen —
+  // paused on hover so it doesn't jump away mid-read/mid-click.
+  useEffect(() => {
+    if (popular.length < 2 || heroPaused) return;
+    const id = setInterval(() => setHeroIndex((i) => (i + 1) % popular.length), 4500);
+    return () => clearInterval(id);
+  }, [popular.length, heroPaused]);
+
   const filtered = search.length > 1 ? visas.filter((v) => v.country.toLowerCase().includes(search.toLowerCase())) : [];
 
-  const heroVisa = visas.find((v) => v.slug === 'dubai');
+  const heroVisa = popular[heroIndex % (popular.length || 1)] || visas.find((v) => v.slug === 'dubai');
   const heroCheapest = (heroVisa?.plans || [])
     .filter((p) => !p.isContactUs && (p.price || p.publicPrice) > 0)
     .sort((a, b) => (a.price || a.publicPrice) - (b.price || b.publicPrice))[0];
@@ -162,7 +173,10 @@ export default function HomePage() {
             </div>
 
             <div className="relative space-y-4">
-              <div className="hidden lg:block max-w-xs ml-auto">
+              {/* Width intentionally matches the floating-card below (no max-w
+                  cap) so the two right-column boxes align edge-to-edge instead
+                  of the login box looking undersized next to a wider card. */}
+              <div className="hidden lg:block">
                 {user ? (
                   <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 flex items-center justify-between gap-3">
                     <p className="text-xs text-sky-100">Welcome back, <span className="font-bold text-white">{user.name}</span></p>
@@ -175,35 +189,47 @@ export default function HomePage() {
                 )}
               </div>
 
-              <div className="relative">
-              <div className="floating-card">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Popular destination</p>
-                    <h2 className="mt-3 text-3xl font-bold text-white">UAE Visa</h2>
-                  </div>
-                  <div className="rounded-2xl bg-orange-500/20 p-3 text-3xl">🇦🇪</div>
-                </div>
-
-                <div className="mt-6 space-y-3">
-                  {[
-                    ['Processing time', heroVisa?.processingTime || '24-48 hrs'],
-                    ['Travel window', heroCheapest?.label || '30 days'],
-                    ['Starting from', heroCheapest ? `₹${(heroCheapest.price || heroCheapest.publicPrice).toLocaleString('en-IN')}` : 'Loading…'],
-                  ].map(([key, value]) => (
-                    <div key={key} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
-                      <span className="text-sky-100">{key}</span>
-                      <span className="font-semibold text-white">{value}</span>
+              <div className="relative mt-8">
+              <div className="floating-card p-5" onMouseEnter={() => setHeroPaused(true)} onMouseLeave={() => setHeroPaused(false)}>
+                <div key={heroVisa?.slug || 'dubai'} className="animate-fade-in-up">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-200">Popular destination</p>
+                      <h2 className="mt-2 text-2xl font-bold text-white">{heroVisa?.country || 'UAE'} Visa</h2>
                     </div>
-                  ))}
+                    <div className="rounded-2xl bg-orange-500/20 p-2.5 text-2xl">{heroVisa?.flag || '🇦🇪'}</div>
+                  </div>
+
+                  <div className="mt-5 space-y-2.5">
+                    {[
+                      ['Processing time', heroVisa?.processingTime || '24-48 hrs'],
+                      ['Travel window', heroCheapest?.label || '30 days'],
+                      ['Starting from', heroCheapest ? `₹${(heroCheapest.price || heroCheapest.publicPrice).toLocaleString('en-IN')}` : 'Loading…'],
+                    ].map(([key, value]) => (
+                      <div key={key} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm">
+                        <span className="text-sky-100">{key}</span>
+                        <span className="font-semibold text-white">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 flex gap-3">
+                    <Link href={`/visa/${heroVisa?.slug || 'dubai'}`} className="btn-primary flex-1 justify-center">Check eligibility</Link>
+                    <a href={waGeneral()} className="inline-flex items-center justify-center rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15">
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
+                  </div>
                 </div>
 
-                <div className="mt-6 flex gap-3">
-                  <Link href={`/visa/${heroVisa?.slug || 'dubai'}`} className="btn-primary flex-1 justify-center">Check eligibility</Link>
-                  <a href={waGeneral()} className="inline-flex items-center justify-center rounded-2xl bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15">
-                    <MessageCircle className="h-4 w-4" />
-                  </a>
-                </div>
+                {popular.length > 1 && (
+                  <div className="mt-4 flex justify-center gap-1.5">
+                    {popular.map((v, i) => (
+                      <button key={v.slug} type="button" onClick={() => setHeroIndex(i)}
+                        aria-label={`Show ${v.country}`}
+                        className={`h-1.5 rounded-full transition-all ${i === heroIndex % popular.length ? 'w-5 bg-orange-400' : 'w-1.5 bg-white/25 hover:bg-white/40'}`} />
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="absolute -left-5 -top-5 hidden rounded-2xl border border-white/10 bg-sky-500/15 px-4 py-3 shadow-xl backdrop-blur md:block">

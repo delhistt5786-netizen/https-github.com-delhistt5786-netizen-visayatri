@@ -5,9 +5,9 @@ import {
   Users, FileText, Globe, DollarSign, TrendingUp, ArrowUpCircle,
   RefreshCw, CheckCircle, XCircle, MessageCircle, Edit2, Save, X,
   Loader2, BarChart2, Search, Filter, ExternalLink, ShieldCheck, File,
-  UserPlus, Download, Upload, PlaneTakeoff, FilePlus2,
+  UserPlus, Download, Upload, PlaneTakeoff, FilePlus2, Trash2,
 } from 'lucide-react';
-import { adminAPI, agentAPI, appAPI, visaAPI, uploadsOrigin } from '../../../lib/api';
+import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import Loading from '../../../components/ui/Loading';
@@ -110,9 +110,13 @@ export default function AdminDashboard() {
   /* ── Update app status ─────────────────────────────────── */
   const updateStatus = useCallback(async (id, status) => {
     try {
-      await appAPI.updateStatus(id, { status });
-      toast.success(`Status → ${status.replace(/_/g,' ')}`);
+      const r = await appAPI.updateStatus(id, { status });
+      toast.success(r.data.message || `Status → ${status.replace(/_/g,' ')}`);
       setApps(prev => prev.map(a => a._id === id ? { ...a, status } : a));
+      // Marking "approved" auto-emails the applicant (best-effort) and hands
+      // back a WhatsApp deep link — open it too so admin can notify on both
+      // channels without an extra click.
+      if (r.data.whatsappLink) window.open(r.data.whatsappLink, '_blank');
     } catch { toast.error('Update failed'); }
   }, []);
 
@@ -180,17 +184,18 @@ export default function AdminDashboard() {
   const saveEditApp = useCallback(async () => {
     setSaving(true);
     try {
-      await appAPI.updateStatus(editApp._id, { 
-        status: editForm.status, 
-        note: editForm.note, 
-        adminNotes: editForm.adminNotes 
+      const r = await appAPI.updateStatus(editApp._id, {
+        status: editForm.status,
+        note: editForm.note,
+        adminNotes: editForm.adminNotes
       });
-      toast.success('Application updated successfully');
-      setApps(prev => prev.map(a => 
-        a._id === editApp._id 
-          ? { ...a, status: editForm.status, adminNotes: editForm.adminNotes } 
+      toast.success(r.data.message || 'Application updated successfully');
+      setApps(prev => prev.map(a =>
+        a._id === editApp._id
+          ? { ...a, status: editForm.status, adminNotes: editForm.adminNotes }
           : a
       ));
+      if (r.data.whatsappLink) window.open(r.data.whatsappLink, '_blank');
       setEditApp(null);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Save failed');
@@ -347,6 +352,68 @@ export default function AdminDashboard() {
   const [addingVisa, setAddingVisa] = useState(false);
   const [deletingVisa, setDeletingVisa] = useState(null);
   const [togglingVisa, setTogglingVisa] = useState(null);
+
+  // Countries are a fixed reference list (GET /api/countries) that the
+  // visa-country dropdown selects from. When the country an admin needs
+  // (e.g. a brand-new destination) isn't in that list yet, this lets them
+  // create it inline without leaving the Add Visa modal.
+  const [showAddCountry, setShowAddCountry] = useState(false);
+  const [newCountryForm, setNewCountryForm] = useState({ name: '', code: '', flag: '', continent: 'asia' });
+  const [addingCountry, setAddingCountry] = useState(false);
+  const [countryRefreshKey, setCountryRefreshKey] = useState(0);
+  const [showManageCountries, setShowManageCountries] = useState(false);
+  const [countries, setCountries] = useState([]);
+  const [loadingCountries, setLoadingCountries] = useState(false);
+  const [deletingCountry, setDeletingCountry] = useState(null);
+
+  useEffect(() => {
+    if (!showManageCountries) return;
+    setLoadingCountries(true);
+    countryAPI.getAll()
+      .then(r => setCountries((r.data?.data || r.data || []).sort((a, b) => a.name.localeCompare(b.name))))
+      .finally(() => setLoadingCountries(false));
+  }, [showManageCountries, countryRefreshKey]);
+
+  const deleteCountry = useCallback(async (country) => {
+    // Visas store their own country/flag copy at creation time, so deleting
+    // a country here only removes it from this reference list (and the "Add
+    // New Visa" picker) — it doesn't affect any visa already created from it.
+    if (!window.confirm(`Delete "${country.name}"? This can't be undone.`)) return;
+    setDeletingCountry(country._id);
+    try {
+      await countryAPI.delete(country._id);
+      setCountries(prev => prev.filter(c => c._id !== country._id));
+      toast.success(`${country.name} deleted`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete country — it may still be used by a visa');
+    }
+    finally { setDeletingCountry(null); }
+  }, []);
+
+  const addNewCountry = useCallback(async () => {
+    if (!newCountryForm.name.trim()) {
+      toast.error('Country name is required');
+      return;
+    }
+    setAddingCountry(true);
+    try {
+      const r = await countryAPI.create(newCountryForm);
+      const country = r.data.data;
+      setNewVisaForm(prev => ({
+        ...prev,
+        country: country.name,
+        countryRef: country._id,
+        flag: prev.flag || country.flag || '',
+      }));
+      setCountryRefreshKey(k => k + 1); // remount CountrySelect so it refetches and includes the new country
+      setShowAddCountry(false);
+      setNewCountryForm({ name: '', code: '', flag: '', continent: 'asia' });
+      toast.success(`${country.name} added — selected below`);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to add country');
+    }
+    finally { setAddingCountry(false); }
+  }, [newCountryForm]);
 
   const saveEditVisa = useCallback(async () => {
     setSaving(true);
@@ -774,11 +841,18 @@ export default function AdminDashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="font-bold text-primary">Visa Management ({visas.length})</h2>
-              <button onClick={() => setShowAddVisa(true)}
-                className="btn-primary text-sm flex items-center gap-2 px-3 py-1.5">
-                <Globe className="w-4 h-4" />
-                Add New Visa
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowManageCountries(true)}
+                  className="btn-outline text-sm flex items-center gap-2 px-3 py-1.5">
+                  <Globe className="w-4 h-4" />
+                  Manage Countries
+                </button>
+                <button onClick={() => setShowAddVisa(true)}
+                  className="btn-primary text-sm flex items-center gap-2 px-3 py-1.5">
+                  <Globe className="w-4 h-4" />
+                  Add New Visa
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm min-w-[1000px]">
@@ -1293,6 +1367,35 @@ export default function AdminDashboard() {
         )}
       </Modal>
 
+      {/* ── Manage Countries Modal ────────────────────────────── */}
+      <Modal open={showManageCountries} onClose={() => setShowManageCountries(false)} title="Manage Countries" size="lg">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Countries available in the "Add New Visa" picker. Deleting one here doesn't affect visas already created from it.</p>
+          {loadingCountries ? (
+            <div className="py-8 text-center text-sm text-gray-400">Loading…</div>
+          ) : countries.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-400">No countries yet.</div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded-xl">
+              {countries.map(c => (
+                <div key={c._id} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{c.flag}</span>
+                    <span className="font-semibold text-sm text-gray-800">{c.name}</span>
+                    <span className="text-xs text-gray-400 capitalize">{c.continent}</span>
+                  </div>
+                  <button onClick={() => deleteCountry(c)} disabled={deletingCountry === c._id}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                    title="Delete country">
+                    {deletingCountry === c._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
+
       {/* ── Add Visa Modal ────────────────────────────────────── */}
       <Modal open={showAddVisa} onClose={() => setShowAddVisa(false)} title="Add New Visa" size="lg">
         <div className="space-y-6">
@@ -1302,15 +1405,52 @@ export default function AdminDashboard() {
           
           <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-gray-600 mb-1 block">Country Name *</label>
-              <CountrySelect value={newVisaForm.country} placeholder="Select country"
-                onChange={(name, country) => setNewVisaForm({
-                  ...newVisaForm,
-                  country: name,
-                  countryRef: country?._id || '',
-                  flag: newVisaForm.flag || country?.flag || '',
-                })}
-                className="input-field text-sm" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-600 block">Country Name *</label>
+                <button type="button" onClick={() => setShowAddCountry(v => !v)}
+                  className="text-xs font-semibold text-orange-600 hover:text-orange-700">
+                  {showAddCountry ? 'Cancel' : "+ Country not listed? Add new"}
+                </button>
+              </div>
+
+              {showAddCountry ? (
+                <div className="space-y-2 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                  <input placeholder="Country name — e.g. Georgia" value={newCountryForm.name}
+                    onChange={e => setNewCountryForm({ ...newCountryForm, name: e.target.value })}
+                    className="input-field text-sm" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input placeholder="Flag emoji — e.g. 🇬🇪" value={newCountryForm.flag}
+                      onChange={e => setNewCountryForm({ ...newCountryForm, flag: e.target.value })}
+                      className="input-field text-sm" />
+                    <input placeholder="Code — e.g. GE" value={newCountryForm.code}
+                      onChange={e => setNewCountryForm({ ...newCountryForm, code: e.target.value.toUpperCase() })}
+                      className="input-field text-sm" />
+                  </div>
+                  <select value={newCountryForm.continent}
+                    onChange={e => setNewCountryForm({ ...newCountryForm, continent: e.target.value })}
+                    className="input-field text-sm">
+                    {[
+                      ['middle-east', 'Middle East'], ['asia', 'Asia'], ['africa', 'Africa'], ['europe', 'Europe'],
+                      ['north-america', 'North America'], ['south-america', 'South America'], ['oceania', 'Oceania'], ['others', 'Others'],
+                    ].map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                  <button type="button" onClick={addNewCountry} disabled={addingCountry}
+                    className="btn-primary w-full justify-center text-sm py-2">
+                    {addingCountry ? 'Adding…' : 'Save Country'}
+                  </button>
+                </div>
+              ) : (
+                <CountrySelect key={countryRefreshKey} value={newVisaForm.country} placeholder="Select country"
+                  onChange={(name, country) => setNewVisaForm({
+                    ...newVisaForm,
+                    country: name,
+                    countryRef: country?._id || '',
+                    flag: newVisaForm.flag || country?.flag || '',
+                  })}
+                  className="input-field text-sm" />
+              )}
             </div>
 
             <div>

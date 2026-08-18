@@ -4,7 +4,7 @@ import { Check } from 'lucide-react';
 /**
  * ApplyStepper
  *
- * Atlys-style progress indicator for the apply form. Purely visual — it
+ * Progress indicator for the apply form. Purely visual — it
  * reflects how far the applicant has gotten (details filled, documents
  * uploaded, ready to pay) rather than gating navigation, since the underlying
  * form is a single scrollable page.

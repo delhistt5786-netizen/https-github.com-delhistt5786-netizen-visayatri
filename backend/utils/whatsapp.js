@@ -131,6 +131,16 @@ exports.docsRequestedMessage = (applicationId, applicantName, phone, items, note
     `You can reply here or upload via your Visayatri dashboard. Thank you!`,
   ].filter(l => l !== null).join('\n'));
 
+/* ── Admin → applicant: visa approved (before final document) ── */
+exports.visaApprovedMessage = (applicationId, applicantName, phone, visaCountry) =>
+  waLinkTo(phone, [
+    `🎉 *Your Visa Has Been Approved!*`,
+    ``,
+    `Hi ${applicantName},`,
+    `Your ${visaCountry} visa application *${applicationId}* has been approved. We're now preparing your final visa document.`,
+    `Log in to your Visayatri dashboard to track progress. Thank you!`,
+  ].join('\n'));
+
 /* ── Admin → applicant: visa document dispatched ────────── */
 exports.visaDispatchedMessage = (applicationId, applicantName, phone) =>
   waLinkTo(phone, [

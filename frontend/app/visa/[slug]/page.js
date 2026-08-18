@@ -292,10 +292,10 @@ export default function VisaDetailPage() {
 
       {/* Content Section */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
           {/* LEFT: Main Content Tabs */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="lg:col-span-3 space-y-8">
 
             {/* Tabs/Sections Navigation */}
             <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-0">
@@ -472,7 +472,7 @@ export default function VisaDetailPage() {
               </div>
             </div>
           </div>
-          <div>
+          <div className="lg:col-span-2">
             <div className="soft-card lg:sticky lg:top-24 shadow-xl">
               <div className="mb-6 pb-6 border-b border-gray-200">
                 <h2 className="text-2xl font-black text-[#0B3C5D] mb-1">Ready to Apply?</h2>

@@ -20,6 +20,13 @@ const userSchema = new mongoose.Schema({
   companyName:     { type: String, default: '' },
   gstNumber:       { type: String, default: '' },
   city:            { type: String, default: '' },
+
+  // ── Password reset ──────────────────────────────────────
+  // Stores a SHA-256 hash of the token, never the raw value that goes out
+  // in the email — same reasoning as password hashing, so a DB leak alone
+  // can't be used to reset accounts.
+  resetPasswordToken:   { type: String, select: false },
+  resetPasswordExpires: { type: Date, select: false },
 }, { timestamps: true });
 
 // Hash password before save

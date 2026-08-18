@@ -69,7 +69,7 @@ function RegisterForm() {
             {/* Agent benefits callout */}
             <div className="p-4 bg-gradient-to-br from-[#FF7A00]/20 to-orange-500/10 rounded-2xl border border-[#FF7A00]/30">
               <p className="text-sm font-bold text-[#FFB366] mb-2 flex items-center gap-2"><TrendingUp className="w-4 h-4" /> For Agents</p>
-              <p className="text-sm text-white/90">Earn 15-30% commission on each visa application. Build your B2B visa business today.</p>
+              <p className="text-sm text-white/90">Earn commission on each visa application. Build your B2B visa business today.</p>
             </div>
           </div>
 

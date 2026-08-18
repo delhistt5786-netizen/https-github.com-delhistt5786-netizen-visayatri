@@ -82,7 +82,7 @@ export default function HistoryPage() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-500">Private workspace</p>
             <h1 className="mt-2 text-4xl font-black tracking-[-0.05em] text-slate-900">Conversation history</h1>
-            <p className="mt-3 max-w-xl text-slate-600">Keep Copilot- or Claude-style notes and chats on this device. Nothing is sent to a server.</p>
+            <p className="mt-3 max-w-xl text-slate-600">Keep AI assistant-style notes and chats on this device. Nothing is sent to a server.</p>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={handleClear} disabled={!conversations.length} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-red-200 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40">
@@ -165,7 +165,7 @@ export default function HistoryPage() {
               <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
                 <div className="rounded-2xl bg-orange-100 p-4 text-orange-600"><MessageSquare className="h-8 w-8" /></div>
                 <h2 className="mt-5 text-xl font-bold text-slate-900">Your local conversations</h2>
-                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Start a record for a Copilot or Claude conversation and keep it available offline in this browser.</p>
+                <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Start a record for an AI assistant conversation and keep it available offline in this browser.</p>
                 <button type="button" onClick={() => setShowNew(true)} className="btn-primary mt-6"><Plus className="h-5 w-5" /> New conversation</button>
               </div>
             )}

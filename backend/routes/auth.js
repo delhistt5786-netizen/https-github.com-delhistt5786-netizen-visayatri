@@ -1,8 +1,10 @@
 const router = require('express').Router();
 const jwt    = require('jsonwebtoken');
+const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User   = require('../models/User');
 const { protect } = require('../middleware/auth');
+const { mailPasswordReset } = require('../utils/mailer');
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -116,6 +118,63 @@ router.put('/change-password', protect, async (req, res) => {
     user.password = newPassword;
     await user.save();
     res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/auth/forgot-password ───────────────────────
+// Always responds success regardless of whether the email is registered,
+// so this endpoint can't be used to enumerate accounts.
+router.post('/forgot-password', [
+  body('email').isEmail().withMessage('Valid email required').normalizeEmail(),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json({ success: false, message: errors.array()[0].msg });
+
+  try {
+    const user = await User.findOne({ email: req.body.email });
+    if (user) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      user.resetPasswordToken   = crypto.createHash('sha256').update(rawToken).digest('hex');
+      user.resetPasswordExpires = Date.now() + 60 * 60 * 1000; // 1 hour
+      await user.save({ validateBeforeSave: false });
+
+      const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/reset-password?token=${rawToken}`;
+      await mailPasswordReset(user, resetUrl);
+    }
+    res.json({ success: true, message: 'If that email is registered, a reset link has been sent.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ── POST /api/auth/reset-password ────────────────────────
+router.post('/reset-password', [
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('password').isLength({ min: 6 }).withMessage('Password min 6 chars'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty())
+    return res.status(400).json({ success: false, message: errors.array()[0].msg });
+
+  try {
+    const hashedToken = crypto.createHash('sha256').update(req.body.token).digest('hex');
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: Date.now() },
+    }).select('+resetPasswordToken +resetPasswordExpires');
+
+    if (!user)
+      return res.status(400).json({ success: false, message: 'Reset link is invalid or has expired. Please request a new one.' });
+
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'Password reset successfully. You can now log in.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

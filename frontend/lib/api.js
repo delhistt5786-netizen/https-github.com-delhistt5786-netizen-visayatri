@@ -93,6 +93,8 @@ export const authAPI = {
   me: () => withMock(() => api.get('/auth/me'), () => mockData.MOCK_USER),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (data) => api.post('/auth/reset-password', data),
 };
 
 // ── Visas ─────────────────────────────────────────────────

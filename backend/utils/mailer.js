@@ -40,6 +40,27 @@ const wrap = (title, bodyHtml) => `
     <p style="margin-top:32px;color:#888;font-size:12px;">— ${process.env.BRAND_NAME || 'Visayatri'} Visa Services</p>
   </div>`;
 
+const mailPasswordReset = (user, resetUrl) => sendMail({
+  to: user.email,
+  subject: 'Reset your Visayatri password',
+  html: wrap('Reset your password', `
+    <p>Hi ${user.name},</p>
+    <p>We received a request to reset your Visayatri password. Click the button below to choose a new one — this link expires in 1 hour.</p>
+    <p style="margin:24px 0;"><a href="${resetUrl}" style="background:#FF7A00;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:bold;">Reset Password</a></p>
+    <p>If you didn't request this, you can safely ignore this email — your password won't change.</p>
+  `),
+});
+
+const mailVisaApproved = (app) => sendMail({
+  to: app.applicantEmail,
+  subject: `Your ${app.applicationId} visa has been approved 🎉`,
+  html: wrap('Your visa application has been approved!', `
+    <p>Hi ${app.applicantName},</p>
+    <p>Good news — your visa application <b>${app.applicationId}</b> has been approved. We're now preparing your final visa document.</p>
+    <p>Log in to your Visayatri dashboard to track progress, or reply on WhatsApp if you need help.</p>
+  `),
+});
+
 const mailVisaDocumentReady = (app) => sendMail({
   to: app.applicantEmail,
   subject: `Your ${app.applicationId} visa is ready 🎉`,
@@ -62,4 +83,4 @@ const mailDocumentsRequested = (app, items, note) => sendMail({
   `),
 });
 
-module.exports = { sendMail, mailVisaDocumentReady, mailDocumentsRequested };
+module.exports = { sendMail, mailPasswordReset, mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested };

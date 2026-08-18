@@ -119,6 +119,12 @@ export default function LoginPage() {
                   className="w-full py-3 rounded-xl font-bold text-lg bg-gradient-to-r from-[#FF7A00] to-orange-500 hover:from-orange-600 hover:to-orange-700 text-white transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 group">
                   {loading ? 'Signing in...' : <>Sign In <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" /></>}
                 </button>
+
+                <div className="text-center">
+                  <Link href="/auth/forgot-password" className="text-white/80 text-sm underline hover:text-[#FF7A00] transition-colors">
+                    Forgot Password?
+                  </Link>
+                </div>
               </form>
 
               <div className="mt-8 pt-6 border-t border-white/20 text-center">

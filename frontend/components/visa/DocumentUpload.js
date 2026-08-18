@@ -39,6 +39,10 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
   const [rotations, setRotations] = useState({});
   const canvasRef = useRef(null);
   const fileInputRefs = useRef({});
+  // Decoded <img> elements cached by docId+src, so zoom/pan/rotate only
+  // redraws the canvas instead of re-decoding the (often multi-MB) data URI
+  // on every tick — that redecode was the visible flash/blink on each click.
+  const loadedImagesRef = useRef({});
 
   // OCR states
   const [ocrProcessing, setOcrProcessing] = useState(false);
@@ -176,34 +180,48 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
     toast.success('Passport details will be used to pre-fill your application form');
   };
 
-  const drawImage = () => {
-    if (!canvasRef.current || !editingDoc || !imageData[editingDoc]) return;
+  const renderCanvas = (img) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const data = imageData[editingDoc];
     const rotation = rotations[editingDoc] || 0;
+    const scaledWidth  = (img.width * zoom) / 100;
+    const scaledHeight = (img.height * zoom) / 100;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#f0f0f0';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+    ctx.drawImage(img, data.x, data.y, scaledWidth, scaledHeight);
+    ctx.restore();
+
+    ctx.strokeStyle = '#FF7A00';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
+    ctx.setLineDash([]);
+  };
+
+  const drawImage = () => {
+    if (!canvasRef.current || !editingDoc || !imageData[editingDoc]) return;
+    const data = imageData[editingDoc];
+
+    // Already-decoded image for this exact source — redraw synchronously,
+    // no flash. Only decode fresh when the doc or its source actually changes.
+    const cached = loadedImagesRef.current[editingDoc];
+    if (cached && cached.src === data.src && cached.img.complete) {
+      renderCanvas(cached.img);
+      return;
+    }
 
     const img = new Image();
     img.onload = () => {
-      const scaledWidth  = (img.width * zoom) / 100;
-      const scaledHeight = (img.height * zoom) / 100;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#f0f0f0';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate((rotation * Math.PI) / 180);
-      ctx.translate(-canvas.width / 2, -canvas.height / 2);
-      ctx.drawImage(img, data.x, data.y, scaledWidth, scaledHeight);
-      ctx.restore();
-
-      ctx.strokeStyle = '#FF7A00';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 5]);
-      ctx.strokeRect(50, 50, canvas.width - 100, canvas.height - 100);
-      ctx.setLineDash([]);
+      loadedImagesRef.current[editingDoc] = { src: data.src, img };
+      renderCanvas(img);
     };
     img.src = data.src;
   };
@@ -306,7 +324,7 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
             <Brain size={20} className="text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-900">
               <p className="font-semibold">🤖 Intelligent Passport Recognition</p>
-              <p className="mt-1">When you upload your passport (front and back), we'll automatically extract your information. Your digital photo is checked to confirm your face fills a good portion of the frame — like the guides used by Atlys/visa2fly.</p>
+              <p className="mt-1">When you upload your passport (front and back), we'll automatically extract your information. Your digital photo is checked to confirm your face fills a good portion of the frame.</p>
             </div>
           </div>
         </div>
@@ -358,16 +376,16 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
                     )}
                   </div>
                   <div className="flex gap-1.5">
-                    <button onClick={() => setEditingDoc(docType.id)}
+                    <button type="button" onClick={() => setEditingDoc(docType.id)}
                       title="Crop, zoom, or rotate this image"
                       className="flex-1 text-xs bg-orange-100 text-orange-700 py-1 rounded hover:bg-orange-200 transition font-semibold">
                       Edit
                     </button>
-                    <button onClick={() => fileInputRefs.current[docType.id]?.click()}
+                    <button type="button" onClick={() => fileInputRefs.current[docType.id]?.click()}
                       className="flex-1 text-xs bg-blue-100 text-blue-700 py-1 rounded hover:bg-blue-200 transition">
                       Change
                     </button>
-                    <button onClick={() => {
+                    <button type="button" onClick={() => {
                         setDocuments(prev => { const n = { ...prev }; delete n[docType.id]; return n; });
                         setFaceChecks(prev => { const n = { ...prev }; delete n[docType.id]; return n; });
                         if (docType.id === 'frontPassport') setFrontExtractedData(null);
@@ -379,7 +397,7 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
                   </div>
                 </div>
               ) : (
-                <button onClick={() => fileInputRefs.current[docType.id]?.click()} disabled={ocrProcessing}
+                <button type="button" onClick={() => fileInputRefs.current[docType.id]?.click()} disabled={ocrProcessing}
                   className="w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-[#FF7A00] transition flex flex-col items-center justify-center gap-2 cursor-pointer group disabled:opacity-50">
                   <span className="text-2xl">{docType.icon}</span>
                   <p className="text-xs font-semibold text-gray-700 group-hover:text-[#FF7A00]">Upload</p>
@@ -404,7 +422,7 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-[#0B3C5D]">✂️ Edit {DOCUMENT_TYPES.find(d => d.id === editingDoc)?.label}</h3>
-                <button onClick={() => setEditingDoc(null)} className="p-2 hover:bg-gray-100 rounded-lg transition"><X className="w-5 h-5" /></button>
+                <button type="button" onClick={() => setEditingDoc(null)} className="p-2 hover:bg-gray-100 rounded-lg transition"><X className="w-5 h-5" /></button>
               </div>
             </div>
             <div className="p-6 space-y-4">
@@ -412,21 +430,21 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
                 <canvas ref={canvasRef} width={500} height={400} className="mx-auto" style={{ maxWidth: '100%', height: 'auto' }} />
               </div>
               <div className="flex items-center gap-3 justify-center flex-wrap">
-                <button onClick={() => handleZoom('out')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"><ZoomOut className="w-5 h-5" /></button>
+                <button type="button" onClick={() => handleZoom('out')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"><ZoomOut className="w-5 h-5" /></button>
                 <span className="font-semibold text-gray-700 min-w-12 text-center">{zoom}%</span>
-                <button onClick={() => handleZoom('in')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"><ZoomIn className="w-5 h-5" /></button>
+                <button type="button" onClick={() => handleZoom('in')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition"><ZoomIn className="w-5 h-5" /></button>
                 <span className="w-px h-6 bg-gray-300 mx-1" />
-                <button onClick={() => handleRotate('ccw')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition" title="Rotate left"><RotateCcw className="w-5 h-5" /></button>
-                <button onClick={() => handleRotate('cw')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition" title="Rotate right"><RotateCw className="w-5 h-5" /></button>
+                <button type="button" onClick={() => handleRotate('ccw')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition" title="Rotate left"><RotateCcw className="w-5 h-5" /></button>
+                <button type="button" onClick={() => handleRotate('cw')} className="p-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition" title="Rotate right"><RotateCw className="w-5 h-5" /></button>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <button onClick={() => handlePan(0, 10)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">↑</button>
+                <button type="button" onClick={() => handlePan(0, 10)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">↑</button>
                 <div></div>
-                <button onClick={() => handlePan(0, -10)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">↓</button>
-                <button onClick={() => handlePan(10, 0)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">←</button>
-                <button onClick={() => setImageData(prev => ({ ...prev, [editingDoc]: { ...prev[editingDoc], x: 0, y: 0 } }))}
+                <button type="button" onClick={() => handlePan(0, -10)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">↓</button>
+                <button type="button" onClick={() => handlePan(10, 0)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">←</button>
+                <button type="button" onClick={() => setImageData(prev => ({ ...prev, [editingDoc]: { ...prev[editingDoc], x: 0, y: 0 } }))}
                   className="py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition text-xs">Reset</button>
-                <button onClick={() => handlePan(-10, 0)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">→</button>
+                <button type="button" onClick={() => handlePan(-10, 0)} className="py-2 bg-blue-100 text-blue-700 rounded-lg font-semibold hover:bg-blue-200 transition">→</button>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-gray-700">
                 <p className="flex gap-2 items-start">
@@ -435,8 +453,8 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
                 </p>
               </div>
               <div className="flex gap-3">
-                <button onClick={() => setEditingDoc(null)} className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition">Cancel</button>
-                <button onClick={handleCrop} className="flex-1 py-3 bg-gradient-to-r from-[#FF7A00] to-orange-500 text-white rounded-lg font-semibold hover:from-orange-600 flex items-center justify-center gap-2">
+                <button type="button" onClick={() => setEditingDoc(null)} className="flex-1 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition">Cancel</button>
+                <button type="button" onClick={handleCrop} className="flex-1 py-3 bg-gradient-to-r from-[#FF7A00] to-orange-500 text-white rounded-lg font-semibold hover:from-orange-600 flex items-center justify-center gap-2">
                   <Crop className="w-4 h-4" /> Save & Crop
                 </button>
               </div>
@@ -447,7 +465,7 @@ export default function DocumentUpload({ applicationId, onUploadComplete, onPass
 
       {applicationId && Object.keys(documents).length > 0 && (
         <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -m-4">
-          <button onClick={handleUpload} disabled={uploading}
+          <button type="button" onClick={handleUpload} disabled={uploading}
             className="w-full py-4 bg-gradient-to-r from-[#0B3C5D] to-[#0d3b66] text-white rounded-lg font-bold hover:from-[#0d3b66] hover:to-[#061f3b] transition disabled:opacity-50 flex items-center justify-center gap-2">
             {uploading ? (<><div className="animate-spin">⌛</div>Uploading...</>) : (<><Check className="w-5 h-5" />Upload {Object.keys(documents).length} Document{Object.keys(documents).length !== 1 ? 's' : ''}</>)}
           </button>

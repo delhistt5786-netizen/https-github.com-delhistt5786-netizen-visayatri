@@ -11,7 +11,7 @@ const { handleUpload }       = require('../middleware/upload');
 const { checkFaceCoverage }  = require('../middleware/faceCheck');
 const { debitWallet, creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
-const { mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
+const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
 
 const PHOTO_DOC_TYPES = new Set(['photo', 'digitalPhoto']);
 
@@ -363,13 +363,14 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
       return res.status(403).json({ success: false, message: 'Access denied.' });
 
     const oldStatus = app.status;
+    const justApproved = status === 'approved' && oldStatus !== 'approved';
     app.status = status;
     app.statusHistory.push({ status, note: note || '', updatedBy: req.user._id });
     if (rejectionReason) app.rejectionReason = rejectionReason;
     if (adminNotes)      app.adminNotes      = adminNotes;
 
     /* Commission credit on first approval */
-    if (status === 'approved' && oldStatus !== 'approved') {
+    if (justApproved) {
       if (app.agentId && !app.commissionPaid && app.commissionAmount > 0) {
         await creditWallet(
           app.agentId, app.commissionAmount, 'commission',
@@ -382,7 +383,24 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
     }
 
     await app.save();
-    res.json({ success: true, data: app, message: `Status updated to "${status}"` });
+
+    // Notify the applicant by email (best-effort) + hand back a WhatsApp
+    // deep link the admin can also send — same pattern used for
+    // request-documents / visa-document dispatch below.
+    let emailResult = { sent: false };
+    let whatsappLink = null;
+    if (justApproved) {
+      await app.populate('visaId', 'country');
+      emailResult = await mailVisaApproved(app);
+      whatsappLink = wa.visaApprovedMessage(app.applicationId, app.applicantName, app.applicantPhone, app.visaId?.country || 'visa');
+    }
+
+    res.json({
+      success: true, data: app, whatsappLink,
+      message: justApproved
+        ? `Status updated to "approved"${emailResult.sent ? ' — email sent' : ' (email not configured, use WhatsApp)'}`
+        : `Status updated to "${status}"`,
+    });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

@@ -79,6 +79,7 @@ export default function PassportReview({
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="text-white hover:bg-blue-800 p-2 rounded-full transition"
             disabled={loading}
@@ -168,6 +169,7 @@ export default function PassportReview({
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-800">Extracted Information</h3>
               <button
+                type="button"
                 onClick={() => setIsEditing(!isEditing)}
                 className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium transition"
               >
@@ -224,6 +226,7 @@ export default function PassportReview({
         <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-end space-x-3">
           {isEditing && (
             <button
+              type="button"
               onClick={handleReset}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 font-medium transition disabled:opacity-50"
               disabled={loading}
@@ -232,6 +235,7 @@ export default function PassportReview({
             </button>
           )}
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 font-medium transition disabled:opacity-50"
             disabled={loading}
@@ -239,6 +243,7 @@ export default function PassportReview({
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleConfirm}
             disabled={loading || Object.values(editedData).every(v => !v)}
             className="px-6 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
