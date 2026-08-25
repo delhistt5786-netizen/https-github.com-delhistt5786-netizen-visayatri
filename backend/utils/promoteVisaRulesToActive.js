@@ -19,6 +19,7 @@ const PILOT_COUNTRIES = [
   'qatar', 'bahrain', 'jordan', 'singapore', 'malaysia', 'hong-kong',
   'russia', 'indonesia', 'cambodia',
   'egypt', 'kenya', 'sri-lanka', 'azerbaijan', 'morocco', 'tanzania',
+  'japan', 'south-africa', 'ukraine', 'uzbekistan', 'armenia', 'mongolia',
 ];
 
 async function run() {
