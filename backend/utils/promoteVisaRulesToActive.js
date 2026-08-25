@@ -21,6 +21,11 @@ const PILOT_COUNTRIES = [
   'egypt', 'kenya', 'sri-lanka', 'azerbaijan', 'morocco', 'tanzania',
   'japan', 'south-africa', 'ukraine', 'uzbekistan', 'armenia', 'mongolia',
   'ethiopia', 'uganda', 'zimbabwe', 'laos', 'tajikistan', 'kyrgyzstan',
+  'papua-new-guinea', 'zambia', 'argentina', 'madagascar',
+  // 'cuba' deliberately excluded — official source/fee could not be
+  // confidently identified in the research pass; needs manual
+  // verification (see verifiedBy note on that VisaRule) before it's
+  // safe to show customers.
 ];
 
 async function run() {
