@@ -175,6 +175,10 @@ export const adminAPI = {
   getTransactions: (params) => withMock(() => api.get('/admin/transactions', { params }), () => ({ data: mockData.MOCK_AGENT_DATA.transactions })),
   getSettings: () => withMock(() => api.get('/admin/settings'), () => ({ data: { serviceFeeEnabled: true, serviceFee: 599 } })),
   updateSettings: (data) => api.put('/admin/settings', data),
+  getVisaRules: () => api.get('/admin/visa-rules'),
+  updateVisaRule: (id, data) => api.put(`/admin/visa-rules/${id}`, data),
+  verifyVisaRule: (id) => api.patch(`/admin/visa-rules/${id}/verify`),
+  unpublishVisaRule: (id) => api.patch(`/admin/visa-rules/${id}/unpublish`),
 };
 
 // ── Payments ──────────────────────────────────────────────

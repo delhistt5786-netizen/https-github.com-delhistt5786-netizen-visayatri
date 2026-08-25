@@ -5,6 +5,7 @@ const Visa        = require('../models/Visa');
 const Country     = require('../models/Country');
 const Transaction = require('../models/Transaction');
 const Settings    = require('../models/Settings');
+const VisaRule    = require('../models/VisaRule');
 const { protect, authorize } = require('../middleware/auth');
 
 // ── GET /api/admin/stats ─────────────────────────────────
@@ -347,6 +348,77 @@ router.put('/settings', protect, authorize('admin'), async (req, res) => {
     if (serviceFeeEnabled !== undefined) settings.serviceFeeEnabled = serviceFeeEnabled;
     await settings.save();
     res.json({ success: true, data: settings, message: 'Settings updated successfully.' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ══════════════════════════════════════════════════════════
+   VISA RULES — official-source rule engine (see models/VisaRule.js)
+══════════════════════════════════════════════════════════ */
+
+// ── GET /api/admin/visa-rules ────────────────────────────
+// Returns every rule regardless of status/verification, grouped by country,
+// so the admin can see what's live vs. still needing review.
+router.get('/visa-rules', protect, authorize('admin'), async (req, res) => {
+  try {
+    const rules = await VisaRule.find().sort({ country: 1, officialVisaName: 1 });
+    res.json({ success: true, data: rules });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ── PUT /api/admin/visa-rules/:id ────────────────────────
+// Edit a rule's fields (e.g. correct a fee after manual verification).
+router.put('/visa-rules/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const rule = await VisaRule.findById(req.params.id);
+    if (!rule) return res.status(404).json({ success: false, message: 'Rule not found.' });
+
+    const editable = [
+      'officialVisaName', 'visaCategory', 'travelDocumentType', 'onlineEVisaAvailable',
+      'separateProcessOffline', 'entryType', 'numberOfEntries', 'validityPeriod',
+      'maximumStay', 'extensionAvailable', 'extensionNote', 'processingTime',
+      'governmentFee', 'visaYatriServiceFee', 'totalCustomerPriceInr', 'eligibility',
+      'passportRequirements', 'photoRequirements', 'requiredDocuments', 'source',
+    ];
+    editable.forEach(field => {
+      if (req.body[field] !== undefined) rule[field] = req.body[field];
+    });
+
+    await rule.save();
+    res.json({ success: true, data: rule, message: 'Rule updated.' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ── PATCH /api/admin/visa-rules/:id/verify ───────────────
+// Marks a rule HUMAN_REVIEWED + ACTIVE — the only way a rule becomes
+// customer-facing (see public GET /api/visa-rules/:countrySlug).
+router.patch('/visa-rules/:id/verify', protect, authorize('admin'), async (req, res) => {
+  try {
+    const rule = await VisaRule.findById(req.params.id);
+    if (!rule) return res.status(404).json({ success: false, message: 'Rule not found.' });
+
+    rule.status = 'ACTIVE';
+    rule.verificationStatus = 'HUMAN_REVIEWED';
+    rule.source.lastVerifiedAt = new Date();
+    rule.source.verifiedBy = req.body.verifiedBy || req.user.name;
+    await rule.save();
+
+    res.json({ success: true, data: rule, message: 'Rule marked verified and active.' });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+// ── PATCH /api/admin/visa-rules/:id/unpublish ────────────
+// Pulls a rule back out of customer view without deleting it (e.g. a
+// government rule changed and the figures need re-checking).
+router.patch('/visa-rules/:id/unpublish', protect, authorize('admin'), async (req, res) => {
+  try {
+    const rule = await VisaRule.findById(req.params.id);
+    if (!rule) return res.status(404).json({ success: false, message: 'Rule not found.' });
+
+    rule.status = 'DRAFT';
+    rule.verificationStatus = 'OFFICIAL_VERIFICATION_REQUIRED';
+    await rule.save();
+
+    res.json({ success: true, data: rule, message: 'Rule unpublished — hidden from customers until re-verified.' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

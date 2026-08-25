@@ -17,7 +17,7 @@ import Modal from '../../../components/ui/Modal';
 import CountrySelect from '../../../components/common/CountrySelect';
 import toast from 'react-hot-toast';
 
-const TABS = ['Dashboard','Applications','Agents','Visas','Users','Transactions','Settings'];
+const TABS = ['Dashboard','Applications','Agents','Visas','Visa Rules','Users','Transactions','Settings'];
 const APP_STATUSES = ['pending','documents_received','in_review','processing','sent_to_immigration','approved','rejected','delivered'];
 const DOC_TYPE_LABELS = {
   frontPassport: 'Front Passport',
@@ -47,6 +47,10 @@ export default function AdminDashboard() {
   const [refreshing,setRefreshing]= useState(false);
   const [error,    setError]     = useState('');
   const [topUpRequests, setTopUpRequests] = useState([]);
+  const [visaRules, setVisaRules] = useState([]);
+  const [visaRulesLoading, setVisaRulesLoading] = useState(false);
+  const [visaRuleFilter, setVisaRuleFilter] = useState('');
+  const [busyRuleId, setBusyRuleId] = useState(null);
   const [reviewingReq, setReviewingReq]   = useState(null);
   const [pwdForm, setPwdForm]         = useState({ currentPassword:'', newPassword:'', confirmPassword:'' });
   const [changingPwd, setChangingPwd] = useState(false);
@@ -94,6 +98,48 @@ export default function AdminDashboard() {
     if (user.role !== 'admin') { router.push('/'); return; }
     loadAll();
   }, []);
+
+  const loadVisaRules = useCallback(async () => {
+    setVisaRulesLoading(true);
+    try {
+      const r = await adminAPI.getVisaRules();
+      setVisaRules(r.data.data || []);
+    } catch { toast.error('Could not load visa rules'); }
+    finally { setVisaRulesLoading(false); }
+  }, []);
+
+  useEffect(() => { if (tab === 'Visa Rules' && visaRules.length === 0) loadVisaRules(); }, [tab]);
+
+  const verifyRule = async (id) => {
+    setBusyRuleId(id);
+    try {
+      const r = await adminAPI.verifyVisaRule(id);
+      setVisaRules(prev => prev.map(x => x._id === id ? r.data.data : x));
+      toast.success('Rule verified and activated');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setBusyRuleId(null); }
+  };
+
+  const unpublishRule = async (id) => {
+    setBusyRuleId(id);
+    try {
+      const r = await adminAPI.unpublishVisaRule(id);
+      setVisaRules(prev => prev.map(x => x._id === id ? r.data.data : x));
+      toast.success('Rule unpublished');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setBusyRuleId(null); }
+  };
+
+  const updateRuleFee = async (id, amount) => {
+    setBusyRuleId(id);
+    try {
+      const rule = visaRules.find(x => x._id === id);
+      const r = await adminAPI.updateVisaRule(id, { governmentFee: { ...rule.governmentFee, amount: Number(amount), status: 'VERIFIED' } });
+      setVisaRules(prev => prev.map(x => x._id === id ? r.data.data : x));
+      toast.success('Fee updated');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setBusyRuleId(null); }
+  };
 
   const loadAll = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -926,6 +972,88 @@ export default function AdminDashboard() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════
+            VISA RULES — official-source rule engine review
+        ══════════════════════════════════════════════════════ */}
+        {tab === 'Visa Rules' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="font-bold text-primary flex items-center gap-2"><ShieldCheck className="w-5 h-5" /> Visa Rules Review</h2>
+                <p className="text-xs text-gray-400 mt-1">Only ACTIVE + HUMAN_REVIEWED rules show to customers on the Eligibility Checker.</p>
+              </div>
+              <input value={visaRuleFilter} onChange={e => setVisaRuleFilter(e.target.value)}
+                placeholder="Filter by country..." className="input-field max-w-xs text-sm" />
+            </div>
+
+            {visaRulesLoading ? (
+              <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+            ) : visaRules.length === 0 ? (
+              <EmptyState icon="📋" title="No visa rules yet" subtitle="Run a seed script to populate rules" />
+            ) : (
+              <div className="space-y-3">
+                {visaRules
+                  .filter(r => !visaRuleFilter || r.country.toLowerCase().includes(visaRuleFilter.toLowerCase()))
+                  .map(rule => (
+                    <div key={rule._id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-gray-800">{rule.country} — {rule.officialVisaName}</p>
+                            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                              rule.status === 'ACTIVE' && rule.verificationStatus === 'HUMAN_REVIEWED'
+                                ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {rule.status === 'ACTIVE' && rule.verificationStatus === 'HUMAN_REVIEWED' ? 'Live' : 'Needs Review'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {rule.entryType} · {rule.validityPeriod?.value} {rule.validityPeriod?.unit} validity · {rule.maximumStay?.value} {rule.maximumStay?.unit} max stay
+                          </p>
+                          {rule.eligibility && <p className="text-xs text-gray-400 mt-1 max-w-2xl">{rule.eligibility}</p>}
+                          <a href={rule.source?.sourceUrl} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:underline mt-2">
+                            {rule.source?.sourceTitle} <ExternalLink className="w-3 h-3" />
+                          </a>
+                          <p className="text-[10px] text-gray-400 mt-1">Verified by: {rule.source?.verifiedBy}</p>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Govt fee:</span>
+                            <input
+                              type="number"
+                              defaultValue={rule.governmentFee?.amount ?? ''}
+                              onBlur={e => e.target.value !== '' && Number(e.target.value) !== rule.governmentFee?.amount && updateRuleFee(rule._id, e.target.value)}
+                              className="w-24 px-2 py-1 text-sm border border-gray-200 rounded-lg"
+                            />
+                            <span className="text-xs text-gray-400">{rule.governmentFee?.currency}</span>
+                            {rule.governmentFee?.status === 'VERIFICATION_REQUIRED' && (
+                              <span className="text-[10px] text-amber-600 font-semibold">unverified</span>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            {!(rule.status === 'ACTIVE' && rule.verificationStatus === 'HUMAN_REVIEWED') ? (
+                              <button onClick={() => verifyRule(rule._id)} disabled={busyRuleId === rule._id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white disabled:opacity-60">
+                                {busyRuleId === rule._id ? '…' : 'Mark Verified & Activate'}
+                              </button>
+                            ) : (
+                              <button onClick={() => unpublishRule(rule._id)} disabled={busyRuleId === rule._id}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-600 disabled:opacity-60">
+                                {busyRuleId === rule._id ? '…' : 'Unpublish'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
 
