@@ -134,12 +134,6 @@ export default function LoginPage() {
                 </Link>
               </div>
 
-              {/* Demo credentials */}
-              <div className="mt-6 p-3 bg-[#FF7A00]/20 rounded-xl border border-[#FF7A00]/30 text-xs text-[#FFB366] text-center space-y-1">
-                <p className="font-semibold mb-1">Demo Accounts</p>
-                <p>Admin: admin@visayatri.com / Admin@123</p>
-                <p>Agent: agent@visayatri.com / Agent@123</p>
-              </div>
             </div>
           </div>
         </div>
