@@ -7,7 +7,7 @@ import {
   Loader2, BarChart2, Search, Filter, ExternalLink, ShieldCheck, File,
   UserPlus, Download, Upload, PlaneTakeoff, FilePlus2, Trash2,
 } from 'lucide-react';
-import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, uploadsOrigin } from '../../../lib/api';
+import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, authAPI, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import Loading from '../../../components/ui/Loading';
@@ -48,6 +48,22 @@ export default function AdminDashboard() {
   const [error,    setError]     = useState('');
   const [topUpRequests, setTopUpRequests] = useState([]);
   const [reviewingReq, setReviewingReq]   = useState(null);
+  const [pwdForm, setPwdForm]         = useState({ currentPassword:'', newPassword:'', confirmPassword:'' });
+  const [changingPwd, setChangingPwd] = useState(false);
+
+  const changePassword = async () => {
+    if (!pwdForm.currentPassword || !pwdForm.newPassword) { toast.error('Fill in all password fields'); return; }
+    if (pwdForm.newPassword.length < 6) { toast.error('New password must be at least 6 characters'); return; }
+    if (pwdForm.newPassword !== pwdForm.confirmPassword) { toast.error('New passwords do not match'); return; }
+    setChangingPwd(true);
+    try {
+      await authAPI.changePassword(pwdForm);
+      toast.success('Password changed successfully');
+      setPwdForm({ currentPassword:'', newPassword:'', confirmPassword:'' });
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to change password');
+    } finally { setChangingPwd(false); }
+  };
 
   /* Filters */
   const [statusFilter, setStatusFilter] = useState('');
@@ -1069,6 +1085,40 @@ export default function AdminDashboard() {
                 className="btn-primary w-full justify-center disabled:opacity-60">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? 'Saving…' : 'Save Settings'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {tab === 'Settings' && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mt-6">
+            <h2 className="font-bold text-primary mb-6 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5" />
+              Change Password
+            </h2>
+            <div className="max-w-md space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-2 block">Current Password</label>
+                <input type="password" value={pwdForm.currentPassword}
+                  onChange={e => setPwdForm({...pwdForm, currentPassword: e.target.value})}
+                  className="input-field" />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-2 block">New Password</label>
+                <input type="password" value={pwdForm.newPassword}
+                  onChange={e => setPwdForm({...pwdForm, newPassword: e.target.value})}
+                  className="input-field" />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700 mb-2 block">Confirm New Password</label>
+                <input type="password" value={pwdForm.confirmPassword}
+                  onChange={e => setPwdForm({...pwdForm, confirmPassword: e.target.value})}
+                  className="input-field" />
+              </div>
+              <button onClick={changePassword} disabled={changingPwd}
+                className="btn-primary w-full justify-center disabled:opacity-60">
+                {changingPwd ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {changingPwd ? 'Updating…' : 'Change Password'}
               </button>
             </div>
           </div>
