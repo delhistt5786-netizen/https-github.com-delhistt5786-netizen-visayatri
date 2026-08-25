@@ -1,10 +1,43 @@
-const express  = require('express');
-const mongoose = require('mongoose');
-const cors     = require('cors');
-const path     = require('path');
+const express     = require('express');
+const mongoose    = require('mongoose');
+const cors        = require('cors');
+const path        = require('path');
+const helmet      = require('helmet');
+const rateLimit   = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
+
+/* ── Security headers ─────────────────────────────────────────
+   crossOriginResourcePolicy must allow cross-origin — the frontend
+   (visayatri.com) loads uploaded images/PDFs from this API's own
+   origin (onrender.com), which is a different origin from Helmet's
+   default same-origin policy. contentSecurityPolicy is for HTML pages;
+   this is a JSON+file API, so it's disabled rather than fighting a
+   default that doesn't apply here. */
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+
+/* ── Rate limiting ─────────────────────────────────────────────
+   General API traffic gets a generous cap; auth endpoints (login,
+   register, password reset) get a much tighter one since those are
+   the ones brute-force/credential-stuffing attacks actually target. */
+app.use('/api', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 400,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please try again in a few minutes.' },
+}));
+app.use('/api/auth', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts. Please try again in a few minutes.' },
+}));
 
 /* ── CORS ──────────────────────────────────────────────────── */
 const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000').split(',').map(o => o.trim());
