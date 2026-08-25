@@ -59,6 +59,7 @@ export default function VisaDetailPage() {
     applicantEmail: user?.email || '',
     applicantPhone: user?.phone || '',
   });
+  const [ocrConflicts, setOcrConflicts] = useState([]);
   const [documents, setDocuments] = useState({
     frontPassport: null,
     backPassport: null,
@@ -190,22 +191,43 @@ export default function VisaDetailPage() {
   };
 
   // Handle auto-fill form from OCR
+  // Fields the applicant has already typed are NEVER silently overwritten —
+  // a mismatch between what they typed and what the passport says is
+  // surfaced as a warning (ocrConflicts) for them to resolve themselves,
+  // per the "never auto-correct application data" rule for passport OCR.
   const handleOCRFormUpdate = (ocrData) => {
-    setForm(prev => ({
-      ...prev,
-      // Extraction uses surname/givenNames, matching the fields produced by
-      // PassportOCRService.parseMRZTD3 / parsePassportText — every field here
-      // stays editable, this is a pre-fill, not a lock.
-      firstName: ocrData.givenNames || prev.firstName,
-      lastName: ocrData.surname || prev.lastName,
-      passportNumber: ocrData.passportNumber || prev.passportNumber,
-      nationality: ocrData.nationality || prev.nationality,
-      dateOfBirth: ocrData.dateOfBirth || prev.dateOfBirth,
-      gender: ocrData.gender || prev.gender,
-      passportIssueDate: ocrData.dateOfIssue || prev.passportIssueDate,
-      passportExpiryDate: ocrData.dateOfExpiry || prev.passportExpiryDate,
-    }));
-    toast.success('Passport details extracted successfully.');
+    const FIELD_MAP = [
+      ['firstName', ocrData.givenNames, 'First name'],
+      ['lastName', ocrData.surname, 'Last name'],
+      ['passportNumber', ocrData.passportNumber, 'Passport number'],
+      ['nationality', ocrData.nationality, 'Nationality'],
+      ['dateOfBirth', ocrData.dateOfBirth, 'Date of birth'],
+      ['gender', ocrData.gender, 'Gender'],
+      ['passportIssueDate', ocrData.dateOfIssue, 'Passport issue date'],
+      ['passportExpiryDate', ocrData.dateOfExpiry, 'Passport expiry date'],
+    ];
+
+    const conflicts = [];
+    setForm(prev => {
+      const next = { ...prev };
+      for (const [field, ocrValue, label] of FIELD_MAP) {
+        if (!ocrValue) continue;
+        const existing = prev[field];
+        if (!existing) {
+          next[field] = ocrValue; // empty field — safe to pre-fill
+        } else if (String(existing).trim().toLowerCase() !== String(ocrValue).trim().toLowerCase()) {
+          conflicts.push({ label, typed: existing, passport: ocrValue }); // leave `next[field]` as what they typed
+        }
+      }
+      return next;
+    });
+
+    setOcrConflicts(conflicts);
+    if (conflicts.length > 0) {
+      toast.error(`Passport doesn't match ${conflicts.length} field(s) you entered — review below.`, { duration: 6000 });
+    } else {
+      toast.success('Passport details extracted successfully.');
+    }
   };
 
   if (loading) return <div className="pt-16"><Loading /></div>;
@@ -655,6 +677,29 @@ export default function VisaDetailPage() {
                       onPassportExtracted={handleOCRFormUpdate}
                     />
                     <p className="text-xs text-gray-500 mt-2">Supported formats: JPG, PNG, PDF (Max 5MB each)</p>
+
+                    {ocrConflicts.length > 0 && (
+                      <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+                        <p className="text-xs font-bold text-red-800">⚠️ Passport doesn't match what you entered:</p>
+                        {ocrConflicts.map((c, i) => (
+                          <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                            <span className="text-red-700">
+                              <strong>{c.label}:</strong> you entered "{c.typed}", passport says "{c.passport}"
+                            </span>
+                            <button type="button"
+                              onClick={() => {
+                                const fieldKey = { 'First name':'firstName','Last name':'lastName','Passport number':'passportNumber','Nationality':'nationality','Date of birth':'dateOfBirth','Gender':'gender','Passport issue date':'passportIssueDate','Passport expiry date':'passportExpiryDate' }[c.label];
+                                setForm(prev => ({ ...prev, [fieldKey]: c.passport }));
+                                setOcrConflicts(prev => prev.filter((_, idx) => idx !== i));
+                              }}
+                              className="whitespace-nowrap text-red-700 font-semibold underline hover:text-red-900">
+                              Use passport value
+                            </button>
+                          </div>
+                        ))}
+                        <p className="text-[11px] text-red-500">Double-check which is correct — a mismatch here is a common cause of visa rejection.</p>
+                      </div>
+                    )}
                   </div>
 
                   {/* Validation: Check Mandatory Documents */}
