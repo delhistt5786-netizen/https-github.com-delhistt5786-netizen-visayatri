@@ -12,6 +12,7 @@ const { checkFaceCoverage }  = require('../middleware/faceCheck');
 const { debitWallet, creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
 const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
+const { buildInvoicePDF } = require('../utils/invoicePdf');
 
 const PHOTO_DOC_TYPES = new Set(['photo', 'digitalPhoto']);
 const REFERRAL_REWARD = 200; // ₹ credited to the referrer's wallet on the referee's first approval
@@ -446,7 +447,15 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
     let whatsappLink = null;
     await app.populate('visaId', 'country');
     if (justApproved) {
-      emailResult = await mailVisaApproved(app);
+      let invoiceBuffer;
+      try {
+        await app.populate('userId', 'name email phone');
+        if (app.agentId) await app.populate('agentId', 'name agentCode');
+        invoiceBuffer = await buildInvoicePDF(app);
+      } catch (pdfErr) {
+        console.error('[applications] invoice PDF generation failed, sending email without attachment:', pdfErr.message);
+      }
+      emailResult = await mailVisaApproved(app, invoiceBuffer);
       whatsappLink = wa.visaApprovedMessage(app.applicationId, app.applicantName, app.applicantPhone, app.visaId?.country || 'visa');
     } else if (oldStatus !== status) {
       // Every other status change also gets a one-click WhatsApp deep link

@@ -16,7 +16,7 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   });
 }
 
-async function sendMail({ to, subject, html }) {
+async function sendMail({ to, subject, html, attachments }) {
   if (!transporter) {
     console.log(`[mailer] SMTP not configured — skipped email to ${to}: "${subject}"`);
     return { sent: false, reason: 'SMTP not configured' };
@@ -24,7 +24,7 @@ async function sendMail({ to, subject, html }) {
   try {
     await transporter.sendMail({
       from: `"${process.env.BRAND_NAME || 'Visayatri'}" <${process.env.SMTP_USER}>`,
-      to, subject, html,
+      to, subject, html, attachments,
     });
     return { sent: true };
   } catch (err) {
@@ -51,14 +51,17 @@ const mailPasswordReset = (user, resetUrl) => sendMail({
   `),
 });
 
-const mailVisaApproved = (app) => sendMail({
+const mailVisaApproved = (app, invoicePdfBuffer) => sendMail({
   to: app.applicantEmail,
   subject: `Your ${app.applicationId} visa has been approved 🎉`,
   html: wrap('Your visa application has been approved!', `
     <p>Hi ${app.applicantName},</p>
     <p>Good news — your visa application <b>${app.applicationId}</b> has been approved. We're now preparing your final visa document.</p>
-    <p>Log in to your Visayatri dashboard to track progress, or reply on WhatsApp if you need help.</p>
+    <p>Your invoice is attached to this email. Log in to your Visayatri dashboard to track progress, or reply on WhatsApp if you need help.</p>
   `),
+  attachments: invoicePdfBuffer
+    ? [{ filename: `visayatri-${app.applicationId}.pdf`, content: invoicePdfBuffer, contentType: 'application/pdf' }]
+    : undefined,
 });
 
 const mailVisaDocumentReady = (app) => sendMail({
