@@ -1,8 +1,8 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Compass, CheckCircle2, AlertTriangle, ArrowRight, Loader2 } from 'lucide-react';
-import { visaAPI } from '../../lib/api';
+import { Compass, CheckCircle2, AlertTriangle, ArrowRight, Loader2, ShieldCheck, ExternalLink } from 'lucide-react';
+import { visaAPI, visaRuleAPI } from '../../lib/api';
 
 const parseMaxDays = (processingTime) => {
   const nums = (processingTime || '').match(/\d+/g);
@@ -21,6 +21,17 @@ export default function EligibilityCheckerPage() {
   }, []);
 
   const selected = useMemo(() => visas.find(v => v.slug === slug), [visas, slug]);
+
+  const [officialRules, setOfficialRules] = useState([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  useEffect(() => {
+    if (!slug) { setOfficialRules([]); return; }
+    setRulesLoading(true);
+    visaRuleAPI.getByCountry(slug)
+      .then(r => setOfficialRules(r.data.data || []))
+      .catch(() => setOfficialRules([]))
+      .finally(() => setRulesLoading(false));
+  }, [slug]);
 
   const daysUntilTravel = travelDate
     ? Math.ceil((new Date(travelDate) - new Date()) / (1000 * 60 * 60 * 24))
@@ -120,6 +131,40 @@ export default function EligibilityCheckerPage() {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+
+            {rulesLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-400"><Loader2 className="w-4 h-4 animate-spin" /> Checking official rules…</div>
+            ) : officialRules.length > 0 && (
+              <div className="border-t border-slate-100 pt-5 space-y-4">
+                <p className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-500" /> Official Government Rules (Verified)
+                </p>
+                {officialRules.map(r => (
+                  <div key={r._id} className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-bold text-gray-800">{r.officialVisaName}</p>
+                      <span className="text-[10px] uppercase tracking-wide font-semibold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        {r.travelDocumentType?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <p><span className="text-gray-400">Entry:</span> {r.entryType}</p>
+                      <p><span className="text-gray-400">Validity:</span> {r.validityPeriod?.value} {r.validityPeriod?.unit}</p>
+                      <p><span className="text-gray-400">Max stay:</span> {r.maximumStay?.value} {r.maximumStay?.unit}</p>
+                      <p><span className="text-gray-400">Govt. fee:</span> {r.governmentFee?.amount != null ? `${r.governmentFee.currency} ${r.governmentFee.amount}` : 'Verification required'}</p>
+                    </div>
+                    {r.eligibility && <p className="text-xs text-gray-500 italic">{r.eligibility}</p>}
+                    <a href={r.source?.sourceUrl} target="_blank" rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline">
+                      Source: {r.source?.sourceTitle} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                ))}
+                <p className="text-[11px] text-gray-400 leading-relaxed">
+                  {officialRules[0]?.disclaimer}
+                </p>
               </div>
             )}
 

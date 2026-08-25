@@ -98,6 +98,10 @@ export const authAPI = {
 };
 
 // ── Visas ─────────────────────────────────────────────────
+export const visaRuleAPI = {
+  getByCountry: (countrySlug) => api.get(`/visa-rules/${countrySlug}`),
+};
+
 export const visaAPI = {
   getAll: (params) => withMock(
     () => api.get('/visas', { params }),
