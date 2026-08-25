@@ -20,6 +20,7 @@ const PILOT_COUNTRIES = [
   'russia', 'indonesia', 'cambodia',
   'egypt', 'kenya', 'sri-lanka', 'azerbaijan', 'morocco', 'tanzania',
   'japan', 'south-africa', 'ukraine', 'uzbekistan', 'armenia', 'mongolia',
+  'ethiopia', 'uganda', 'zimbabwe', 'laos', 'tajikistan', 'kyrgyzstan',
 ];
 
 async function run() {
