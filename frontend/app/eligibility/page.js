@@ -156,6 +156,29 @@ export default function EligibilityCheckerPage() {
                       <p><span className="text-gray-400">Govt. fee:</span> {r.governmentFee?.amount != null ? `${r.governmentFee.currency} ${r.governmentFee.amount}` : 'Verification required'}</p>
                     </div>
                     {r.eligibility && <p className="text-xs text-gray-500 italic">{r.eligibility}</p>}
+
+                    {r.requiredDocuments?.length > 0 && (
+                      <div className="pt-1">
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Document Checklist</p>
+                        <ul className="space-y-1">
+                          {r.requiredDocuments.map((d, i) => (
+                            <li key={i} className="text-xs text-gray-700">
+                              <span className="inline-flex items-center gap-1.5">
+                                {d.critical ? <span className="text-amber-500" title="Critical">⭐</span> : <span className="w-3.5" />}
+                                <span className={d.conditional ? 'text-gray-500' : 'font-medium'}>
+                                  {d.documentName}
+                                </span>
+                                {d.conditional && <span className="text-[10px] text-gray-400">(conditional)</span>}
+                                {!d.required && !d.conditional && <span className="text-[10px] text-gray-400">(optional)</span>}
+                              </span>
+                              {d.condition && <p className="ml-5 text-[11px] text-gray-400 italic">{d.condition}</p>}
+                              {d.officialReason && <p className="ml-5 text-[11px] text-gray-400">{d.officialReason}</p>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <a href={r.source?.sourceUrl} target="_blank" rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline">
                       Source: {r.source?.sourceTitle} <ExternalLink className="w-3 h-3" />
