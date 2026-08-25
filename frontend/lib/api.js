@@ -141,6 +141,7 @@ export const appAPI = {
   requestDocuments: (id, data) => api.post(`/applications/${id}/request-documents`, data),
   getAll: (params) => withMock(() => api.get('/applications', { params }), () => ({ data: mockData.MOCK_APPLICATIONS })),
   edit: (id, data) => api.put(`/applications/${id}`, data),
+  track: (applicationId, email) => api.get('/applications/track', { params: { applicationId, email } }),
 };
 
 // ── Agents ────────────────────────────────────────────────

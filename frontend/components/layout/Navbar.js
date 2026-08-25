@@ -52,6 +52,7 @@ export default function Navbar() {
             <Link href="/visa" className="text-gray-600 hover:text-primary font-medium transition-colors">Visas</Link>
             <Link href="/visa?region=middle-east" className="text-gray-600 hover:text-primary font-medium transition-colors">Middle East</Link>
             <Link href="/visa?region=asia" className="text-gray-600 hover:text-primary font-medium transition-colors">Asia</Link>
+            <Link href="/track" className="text-gray-600 hover:text-primary font-medium transition-colors">Track</Link>
             <Link href="/about" className="text-gray-600 hover:text-primary font-medium transition-colors">About</Link>
             <Link href="/contact" className="text-gray-600 hover:text-primary font-medium transition-colors">Contact</Link>
             <Link href="/history" className="flex items-center gap-1 text-gray-600 hover:text-primary font-medium transition-colors"><History className="h-4 w-4" /> History</Link>
@@ -107,6 +108,8 @@ export default function Navbar() {
           <Link href="/visa" className="block text-gray-700 font-medium py-2" onClick={() => setOpen(false)}>All Visas</Link>
           <Link href="/visa?region=middle-east" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>Middle East</Link>
           <Link href="/visa?region=asia" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>Asia</Link>
+          <Link href="/track" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>Track Application</Link>
+          <Link href="/eligibility" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>Eligibility Checker</Link>
           <Link href="/about" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>About Us</Link>
           <Link href="/contact" className="block text-gray-700 py-2" onClick={() => setOpen(false)}>Contact</Link>
           <Link href="/history" className="flex items-center gap-2 py-2 text-gray-700" onClick={() => setOpen(false)}><History className="h-4 w-4" /> Conversation history</Link>

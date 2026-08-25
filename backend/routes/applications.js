@@ -256,6 +256,47 @@ router.get('/my/avatar', protect, async (req, res) => {
 });
 
 /* ─────────────────────────────────────────────────────────
+   GET /api/applications/track?applicationId=VYT...&email=...
+   Public — no login required. Verifies the applicant's email against the
+   applicationId before returning anything, and only ever returns a status
+   summary (never documents, payment details, or admin notes).
+───────────────────────────────────────────────────────── */
+router.get('/track', async (req, res) => {
+  try {
+    const { applicationId, email } = req.query;
+    if (!applicationId || !email) {
+      return res.status(400).json({ success: false, message: 'Application ID and email are required' });
+    }
+
+    const app = await Application.findOne({
+      applicationId:  applicationId.trim().toUpperCase(),
+      applicantEmail: new RegExp(`^${email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+    })
+      .populate('visaId', 'country flag slug visaType processingTime')
+      .select('applicationId status statusHistory docsRequested visaId applicantName createdAt travelDate rejectionReason');
+
+    if (!app) {
+      return res.status(404).json({ success: false, message: 'No application found for that ID and email' });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        applicationId:   app.applicationId,
+        status:          app.status,
+        statusHistory:   app.statusHistory,
+        docsRequested:   app.docsRequested?.filter(d => !d.fulfilled) || [],
+        visa:            app.visaId,
+        applicantName:   app.applicantName,
+        createdAt:       app.createdAt,
+        travelDate:      app.travelDate,
+        rejectionReason: app.status === 'rejected' ? app.rejectionReason : undefined,
+      },
+    });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ─────────────────────────────────────────────────────────
    GET /api/applications/:id
 ───────────────────────────────────────────────────────── */
 router.get('/:id', protect, async (req, res) => {
