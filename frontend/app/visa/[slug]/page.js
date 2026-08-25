@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle, Clock, ArrowLeft, MessageCircle, ChevronDown, TrendingUp, Wallet, CreditCard, Calendar, FileText, Users, Shield, MapPin, Zap } from 'lucide-react';
-import { visaAPI, appAPI, pdfURL } from '../../../lib/api';
+import { visaAPI, appAPI } from '../../../lib/api';
 import { waApply, waAgentApply } from '../../../lib/whatsapp';
 import { getUser, setAuth } from '../../../lib/auth';
 import Loading from '../../../components/ui/Loading';

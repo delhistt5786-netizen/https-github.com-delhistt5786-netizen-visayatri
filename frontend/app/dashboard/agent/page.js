@@ -6,9 +6,9 @@ import {
   Wallet, TrendingUp, FileText, ArrowUpCircle, ArrowDownCircle,
   MessageCircle, Download, RefreshCw, ChevronRight, BarChart2,
   CheckCircle, Clock, XCircle, AlertCircle, Loader2, User, Save, Search,
-  Trophy, Gift,
+  Trophy, Gift, FolderOpen,
 } from 'lucide-react';
-import { agentAPI, authAPI, pdfURL } from '../../../lib/api';
+import { agentAPI, authAPI, downloadInvoice, downloadApplicationPack } from '../../../lib/api';
 import { getUser, setAuth, getToken } from '../../../lib/auth';
 import { waTrack, waTopUp } from '../../../lib/whatsapp';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -372,10 +372,14 @@ export default function AgentDashboard() {
                         <td className="px-4 py-3"><StatusBadge status={app.status} /></td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <a href={pdfURL(app._id)} target="_blank" rel="noopener noreferrer"
+                            <button onClick={() => downloadInvoice(app._id, app.applicationId).catch(() => toast.error('Could not download invoice'))}
                               title="Download Invoice" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-primary transition-colors">
                               <Download className="w-4 h-4" />
-                            </a>
+                            </button>
+                            <button onClick={() => downloadApplicationPack(app._id, app.applicationId).catch(() => toast.error('Could not download pack'))}
+                              title="Download Document Pack (ZIP)" className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-purple-600 transition-colors">
+                              <FolderOpen className="w-4 h-4" />
+                            </button>
                             <a href={waTrack(app.applicationId, app.applicantName)} target="_blank" rel="noopener noreferrer"
                               title="Track via WhatsApp" className="p-1.5 rounded-lg hover:bg-green-50 text-gray-400 hover:text-green-600 transition-colors">
                               <MessageCircle className="w-4 h-4" />

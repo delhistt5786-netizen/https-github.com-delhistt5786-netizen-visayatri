@@ -7,7 +7,7 @@ import {
   MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff, Gift,
   FolderOpen, Trash2, FilePlus2
 } from 'lucide-react';
-import { appAPI, docAPI, pdfURL, uploadsOrigin } from '../../../lib/api';
+import { appAPI, docAPI, downloadInvoice, downloadApplicationPack, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import { waTrack } from '../../../lib/whatsapp';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -382,11 +382,15 @@ export default function UserDashboard() {
                         )}
 
                         {/* Action Buttons */}
-                        <div className="flex gap-3">
-                          <a href={pdfURL(app._id)} target="_blank" rel="noopener noreferrer"
+                        <div className="flex gap-3 flex-wrap">
+                          <button onClick={e => { e.stopPropagation(); downloadInvoice(app._id, app.applicationId).catch(() => toast.error('Could not download invoice')); }}
                             className="flex-1 px-4 py-2 rounded-xl bg-blue-500/20 text-blue-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-blue-500/30 transition-all border border-blue-500/30">
-                            <Download className="w-4 h-4" /> Download Invoice
-                          </a>
+                            <Download className="w-4 h-4" /> Invoice
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); downloadApplicationPack(app._id, app.applicationId).catch(() => toast.error('Could not download pack')); }}
+                            className="flex-1 px-4 py-2 rounded-xl bg-purple-500/20 text-purple-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-purple-500/30 transition-all border border-purple-500/30">
+                            <FolderOpen className="w-4 h-4" /> Documents (ZIP)
+                          </button>
                           <a href={waTrack(app.applicationId, user?.name)} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                             className="flex-1 px-4 py-2 rounded-xl bg-green-500/20 text-green-300 font-semibold text-sm flex items-center justify-center gap-2 hover:bg-green-500/30 transition-all border border-green-500/30">
                             <MessageCircle className="w-4 h-4" /> Track

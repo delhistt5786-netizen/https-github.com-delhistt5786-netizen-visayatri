@@ -197,4 +197,25 @@ export const docAPI = {
 // ── PDF ───────────────────────────────────────────────────
 export const pdfURL = (appId) => `${BASE}/pdf/invoice/${appId}`;
 
+// Auth-protected downloads can't use a plain <a href> (no way to attach the
+// JWT to a browser navigation) — fetch as a blob via axios instead, then
+// hand the browser a local object URL to save.
+async function downloadBlob(url, filename) {
+  const res = await api.get(url, { responseType: 'blob', timeout: 30000 });
+  const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+  const a = document.createElement('a');
+  a.href = blobUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
+export const downloadInvoice = (appId, applicationId) =>
+  downloadBlob(`/pdf/invoice/${appId}`, `visayatri-${applicationId}.pdf`);
+
+export const downloadApplicationPack = (appId, applicationId) =>
+  downloadBlob(`/pdf/pack/${appId}`, `VY-${applicationId}-Documents.zip`);
+
 export default api;
