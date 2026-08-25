@@ -187,6 +187,13 @@ export const paymentAPI = {
   verify: (data) => api.post('/payments/verify', data),
 };
 
+// ── Document Vault ────────────────────────────────────────
+export const docAPI = {
+  getMine: () => api.get('/documents'),
+  upload: (formData) => api.post('/documents', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  remove: (id) => api.delete(`/documents/${id}`),
+};
+
 // ── PDF ───────────────────────────────────────────────────
 export const pdfURL = (appId) => `${BASE}/pdf/invoice/${appId}`;
 

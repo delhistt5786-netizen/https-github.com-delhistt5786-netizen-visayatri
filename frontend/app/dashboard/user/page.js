@@ -4,9 +4,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   FileText, Clock, CheckCircle, XCircle, Upload, Download,
-  MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff, Gift
+  MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff, Gift,
+  FolderOpen, Trash2, FilePlus2
 } from 'lucide-react';
-import { appAPI, pdfURL, uploadsOrigin } from '../../../lib/api';
+import { appAPI, docAPI, pdfURL, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import { waTrack } from '../../../lib/whatsapp';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -28,6 +29,10 @@ export default function UserDashboard() {
   const [expanded,   setExpanded]   = useState(null);
   const [error,      setError]      = useState('');
   const [avatarUrl,  setAvatarUrl]  = useState(null);
+  const [vaultDocs,  setVaultDocs]  = useState([]);
+  const [vaultLoading, setVaultLoading] = useState(false);
+  const [vaultUploading, setVaultUploading] = useState(false);
+  const [vaultDocType, setVaultDocType] = useState('passport');
 
   useEffect(() => {
     if (!user) { router.push('/auth/login'); return; }
@@ -36,7 +41,40 @@ export default function UserDashboard() {
     appAPI.getMyAvatar().then(res => {
       if (res.data?.avatarUrl) setAvatarUrl(`${uploadsOrigin}${res.data.avatarUrl}`);
     }).catch(() => {});
+    loadVault();
   }, []);
+
+  const loadVault = useCallback(async () => {
+    setVaultLoading(true);
+    try {
+      const r = await docAPI.getMine();
+      setVaultDocs(r.data.data || []);
+    } catch { /* silent — non-critical */ }
+    finally { setVaultLoading(false); }
+  }, []);
+
+  const uploadToVault = async (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('File exceeds 5 MB limit.'); return; }
+    setVaultUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('document', file);
+      fd.append('documentType', vaultDocType);
+      const r = await docAPI.upload(fd);
+      setVaultDocs(prev => [r.data.data, ...prev]);
+      toast.success('Document saved to your vault');
+    } catch (err) { toast.error(err.response?.data?.message || 'Upload failed'); }
+    finally { setVaultUploading(false); }
+  };
+
+  const removeFromVault = async (id) => {
+    try {
+      await docAPI.remove(id);
+      setVaultDocs(prev => prev.filter(d => d._id !== id));
+      toast.success('Document removed');
+    } catch (err) { toast.error(err.response?.data?.message || 'Failed to remove'); }
+  };
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -155,6 +193,48 @@ export default function UserDashboard() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Document Vault */}
+        <div className="mb-8 rounded-2xl p-5 bg-gradient-to-br from-white/5 to-white/10 border border-white/10 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <p className="text-sm font-bold text-white/90 uppercase tracking-wide flex items-center gap-2">
+              <FolderOpen className="w-4 h-4 text-[#FF7A00]" /> My Documents
+            </p>
+            <div className="flex items-center gap-2">
+              <select value={vaultDocType} onChange={e => setVaultDocType(e.target.value)}
+                className="bg-white/10 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white">
+                {['passport','photo','bank_statement','itr','employment_letter','business_registration','invitation_letter','insurance','hotel_booking','flight_itinerary','other'].map(t => (
+                  <option key={t} value={t} className="text-gray-900">{t.replace(/_/g,' ')}</option>
+                ))}
+              </select>
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[#FF7A00] hover:bg-orange-600 text-white transition-all">
+                {vaultUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FilePlus2 className="w-3.5 h-3.5" />}
+                Add
+                <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden"
+                  onChange={e => { uploadToVault(e.target.files?.[0]); e.target.value = ''; }} disabled={vaultUploading} />
+              </label>
+            </div>
+          </div>
+          {vaultLoading ? (
+            <p className="text-xs text-white/40">Loading…</p>
+          ) : vaultDocs.length === 0 ? (
+            <p className="text-xs text-white/40">No documents saved yet. Upload your passport, photo, or other documents once — you'll be able to reuse them for future applications.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {vaultDocs.map(d => (
+                <div key={d._id} className="flex items-center justify-between gap-2 bg-white/5 rounded-xl px-3 py-2 border border-white/10">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-white/90 capitalize truncate">{d.documentType.replace(/_/g,' ')}</p>
+                    <p className="text-[10px] text-white/40 truncate">{d.originalName}</p>
+                  </div>
+                  <button onClick={() => removeFromVault(d._id)} className="text-white/40 hover:text-red-400 flex-shrink-0">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Applications */}

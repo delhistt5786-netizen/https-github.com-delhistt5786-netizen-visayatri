@@ -43,6 +43,7 @@ app.use('/api/payments',     require('./routes/payments'));
 app.use('/api/pdf',          require('./routes/pdf'));
 app.use('/api/settings',     require('./routes/settings'));
 app.use('/api/visa-rules',   require('./routes/visaRules'));
+app.use('/api/documents',    require('./routes/documents'));
 
 /* ── Health ───────────────────────────────────────────────── */
 app.get('/api/health', (_, res) =>
