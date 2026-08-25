@@ -32,7 +32,7 @@ export default function Footer() {
             <h4 className="font-semibold mb-4 text-lg">Quick Links</h4>
             <ul className="space-y-2 text-sm text-blue-200">
               {['/', '/visa', '/auth/login', '/auth/register', '/dashboard/user'].map((href, i) => (
-                <li key={i}><Link href={href} className="hover:text-white transition-colors">{['Home','All Visas','Login','Register','My Dashboard'][i]}</Link></li>
+                <li key={i}><Link href={href} className="hover:text-white transition-colors">{['Home','All Visas','Customer Login','Customer Register','My Dashboard'][i]}</Link></li>
               ))}
             </ul>
           </div>
@@ -56,8 +56,8 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold mb-4 text-lg">For Partners</h4>
             <ul className="space-y-2 text-sm text-blue-200">
-              <li><Link href="/auth/register?role=agent" className="hover:text-white">Become an Agent</Link></li>
-              <li><Link href="/dashboard/agent" className="hover:text-white">Agent Portal</Link></li>
+              <li><Link href="/auth/register?role=agent" className="hover:text-white">Agent Registration</Link></li>
+              <li><Link href="/dashboard/agent" className="hover:text-white">Agent Login</Link></li>
               <li><a href="https://wa.me/919717743876" className="hover:text-white">WhatsApp Us</a></li>
             </ul>
             <div className="mt-6 p-3 bg-secondary/30 rounded-xl text-sm text-blue-100">
