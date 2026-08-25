@@ -17,6 +17,7 @@ const VisaRule = require('../models/VisaRule');
 const PILOT_COUNTRIES = [
   'oman', 'vietnam', 'thailand', 'saudi-arabia',
   'qatar', 'bahrain', 'jordan', 'singapore', 'malaysia', 'hong-kong',
+  'russia', 'indonesia', 'cambodia',
 ];
 
 async function run() {
