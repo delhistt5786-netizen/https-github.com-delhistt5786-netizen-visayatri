@@ -14,7 +14,10 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const VisaRule = require('../models/VisaRule');
 
-const PILOT_COUNTRIES = ['oman', 'vietnam', 'thailand', 'saudi-arabia'];
+const PILOT_COUNTRIES = [
+  'oman', 'vietnam', 'thailand', 'saudi-arabia',
+  'qatar', 'bahrain', 'jordan', 'singapore', 'malaysia', 'hong-kong',
+];
 
 async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
