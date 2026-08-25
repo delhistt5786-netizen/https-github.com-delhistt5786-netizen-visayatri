@@ -66,6 +66,41 @@ router.get('/dashboard', protect, authorize('agent'), async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
+/* ── GET /api/agents/leaderboard ─────────────────────────
+   Top agents by lifetime commission earned. Names are shown as
+   "First L." (except the requesting agent's own row, and referral
+   attribution) so agents can't scrape each other's full identity. */
+router.get('/leaderboard', protect, authorize('agent'), async (req, res) => {
+  try {
+    const top = await User.find({ role: 'agent', isApproved: true, totalCommission: { $gt: 0 } })
+      .sort('-totalCommission')
+      .limit(10)
+      .select('name companyName totalCommission agentCode');
+
+    const rows = top.map((a, i) => ({
+      rank: i + 1,
+      isYou: a._id.toString() === req.user._id.toString(),
+      name: a._id.toString() === req.user._id.toString()
+        ? a.name
+        : `${a.name.split(' ')[0]} ${a.name.split(' ')[1]?.[0] || ''}.`.trim(),
+      companyName: a.companyName,
+      totalCommission: a.totalCommission,
+    }));
+
+    const inTop10 = rows.some(r => r.isYou);
+    let yourRank = null;
+    if (!inTop10) {
+      const higherCount = await User.countDocuments({
+        role: 'agent', isApproved: true,
+        totalCommission: { $gt: req.user.totalCommission || 0 },
+      });
+      yourRank = higherCount + 1;
+    }
+
+    res.json({ success: true, data: { top: rows, yourRank, yourCommission: req.user.totalCommission || 0 } });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
 /* ── GET /api/agents/wallet ─────────────────────────────── */
 router.get('/wallet', protect, authorize('agent'), agentApproved, async (req, res) => {
   try {

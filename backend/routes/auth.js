@@ -22,6 +22,7 @@ const sendAuth = (res, status, user, token) =>
       isApproved:    user.isApproved,
       agentCode:     user.agentCode,
       walletBalance: user.walletBalance,
+      referralCode:  user.referralCode,
     },
   });
 
@@ -37,7 +38,7 @@ router.post('/register', [
     return res.status(400).json({ success: false, message: errors.array()[0].msg, errors: errors.array() });
 
   try {
-    const { name, email, password, phone, role, companyName, city } = req.body;
+    const { name, email, password, phone, role, companyName, city, referralCode } = req.body;
 
     if (await User.findOne({ email }))
       return res.status(409).json({ success: false, message: 'Email already registered. Please login.' });
@@ -49,6 +50,11 @@ router.post('/register', [
       userData.isApproved  = false;
       userData.companyName = companyName || '';
       userData.city        = city || '';
+    }
+
+    if (referralCode) {
+      const referrer = await User.findOne({ referralCode: referralCode.trim().toUpperCase() });
+      if (referrer) userData.referredBy = referrer._id;
     }
 
     const user  = await User.create(userData);
@@ -77,6 +83,10 @@ router.post('/login', [
 
     if (!user.isActive)
       return res.status(403).json({ success: false, message: 'Account disabled. Contact support.' });
+
+    // Backfill referral codes for accounts created before the referral
+    // program existed — the pre-save hook only ran on the original create.
+    if (!user.referralCode) await user.save();
 
     const token = signToken(user._id);
     sendAuth(res, 200, user, token);

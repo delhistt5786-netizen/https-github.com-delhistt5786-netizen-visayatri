@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   FileText, Clock, CheckCircle, XCircle, Upload, Download,
-  MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff
+  MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff, Gift
 } from 'lucide-react';
 import { appAPI, pdfURL, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
@@ -128,6 +128,33 @@ export default function UserDashboard() {
               <p className="text-xs text-white/60 font-semibold mt-1 uppercase tracking-wide">{label}</p>
             </div>
           ))}
+        </div>
+
+        {/* Referral program */}
+        <div className="mb-8 rounded-2xl p-5 bg-gradient-to-br from-emerald-500/20 to-emerald-500/5 border border-emerald-500/20 backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-emerald-300 uppercase tracking-wide flex items-center gap-2">
+                <Gift className="w-4 h-4" /> Refer &amp; Earn
+              </p>
+              <p className="text-white/70 text-sm mt-1">
+                {user?.referralCode
+                  ? <>Share your link — you get <strong className="text-white">₹200</strong> credited to your wallet when someone you refer gets their first visa approved.</>
+                  : 'Log in again to get your personal referral link.'}
+              </p>
+            </div>
+            {user?.referralCode && (
+              <button
+                onClick={() => {
+                  const link = `${window.location.origin}/auth/register?ref=${user.referralCode}`;
+                  navigator.clipboard.writeText(link);
+                  toast.success('Referral link copied!');
+                }}
+                className="whitespace-nowrap px-5 py-2.5 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all">
+                Copy Referral Link
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Applications */}

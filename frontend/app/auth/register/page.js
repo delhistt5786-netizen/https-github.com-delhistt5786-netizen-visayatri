@@ -10,7 +10,8 @@ import toast from 'react-hot-toast';
 function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [form, setForm] = useState({ name:'', email:'', phone:'', password:'', role: params.get('role') || 'user' });
+  const referralCode = params.get('ref') || '';
+  const [form, setForm] = useState({ name:'', email:'', phone:'', password:'', role: params.get('role') || 'user', referralCode });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -116,6 +117,12 @@ function RegisterForm() {
                       className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#FF7A00] transition-all" />
                   </div>
                 ))}
+
+                {referralCode && (
+                  <div className="p-3 bg-emerald-500/20 rounded-xl border border-emerald-400/30 text-xs text-emerald-200">
+                    ✓ Referral code <strong>{referralCode}</strong> applied
+                  </div>
+                )}
 
                 {form.role === 'agent' && (
                   <div className="p-3 bg-[#FF7A00]/20 rounded-xl border border-[#FF7A00]/30 text-xs text-[#FFB366] space-y-1">

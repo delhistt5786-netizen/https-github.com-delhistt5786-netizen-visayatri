@@ -141,6 +141,16 @@ exports.visaApprovedMessage = (applicationId, applicantName, phone, visaCountry)
     `Log in to your Visayatri dashboard to track progress. Thank you!`,
   ].join('\n'));
 
+/* ── Admin → applicant: any status change ───────────────── */
+exports.statusUpdateToApplicantMessage = (applicationId, applicantName, phone, status, visaCountry) =>
+  waLinkTo(phone, [
+    `📬 *Visa Application Update*`,
+    ``,
+    `Hi ${applicantName},`,
+    `Your ${visaCountry} application *${applicationId}* status is now *${status.replace(/_/g,' ').toUpperCase()}*.`,
+    `Log in to your Visayatri dashboard for details. Thank you!`,
+  ].join('\n'));
+
 /* ── Admin → applicant: visa document dispatched ────────── */
 exports.visaDispatchedMessage = (applicationId, applicantName, phone) =>
   waLinkTo(phone, [

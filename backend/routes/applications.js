@@ -14,6 +14,7 @@ const wa = require('../utils/whatsapp');
 const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
 
 const PHOTO_DOC_TYPES = new Set(['photo', 'digitalPhoto']);
+const REFERRAL_REWARD = 200; // ₹ credited to the referrer's wallet on the referee's first approval
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -421,6 +422,19 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
         app.commissionPaid = true;
         await User.findByIdAndUpdate(app.agentId, { $inc: { totalCommission: app.commissionAmount } });
       }
+
+      /* Referral reward — the applicant's referrer gets a one-time wallet
+         credit the first time this applicant's visa is approved. */
+      const applicant = await User.findById(app.userId);
+      if (applicant?.referredBy && !applicant.referralRewardGiven) {
+        await creditWallet(
+          applicant.referredBy, REFERRAL_REWARD, 'referral_bonus',
+          `Referral bonus — ${applicant.name}'s first approved application (${app.applicationId})`,
+          { applicationId: app._id, createdBy: req.user._id },
+        );
+        applicant.referralRewardGiven = true;
+        await applicant.save();
+      }
     }
 
     await app.save();
@@ -430,10 +444,16 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
     // request-documents / visa-document dispatch below.
     let emailResult = { sent: false };
     let whatsappLink = null;
+    await app.populate('visaId', 'country');
     if (justApproved) {
-      await app.populate('visaId', 'country');
       emailResult = await mailVisaApproved(app);
       whatsappLink = wa.visaApprovedMessage(app.applicationId, app.applicantName, app.applicantPhone, app.visaId?.country || 'visa');
+    } else if (oldStatus !== status) {
+      // Every other status change also gets a one-click WhatsApp deep link
+      // so the admin can notify the applicant without typing the message.
+      whatsappLink = wa.statusUpdateToApplicantMessage(
+        app.applicationId, app.applicantName, app.applicantPhone, status, app.visaId?.country || 'visa',
+      );
     }
 
     res.json({

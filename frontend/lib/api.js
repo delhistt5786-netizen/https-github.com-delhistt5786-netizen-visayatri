@@ -159,6 +159,7 @@ export const agentAPI = {
   create: (data) => api.post('/agents', data),
   update: (id, data) => api.put(`/agents/${id}`, data),
   getTransactions: (id) => withMock(() => api.get(`/agents/${id}/transactions`), () => mockData.MOCK_AGENT_DATA.transactions),
+  getLeaderboard: () => api.get('/agents/leaderboard'),
 };
 
 // ── Admin ─────────────────────────────────────────────────

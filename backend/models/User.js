@@ -27,12 +27,25 @@ const userSchema = new mongoose.Schema({
   // can't be used to reset accounts.
   resetPasswordToken:   { type: String, select: false },
   resetPasswordExpires: { type: Date, select: false },
+
+  // ── Referral program ───────────────────────────────────
+  referralCode:        { type: String, unique: true, sparse: true },
+  referredBy:          { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  referralRewardGiven: { type: Boolean, default: false }, // set once this user's referrer has been paid
 }, { timestamps: true });
 
 // Hash password before save
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+
+// Every user gets a shareable referral code
+userSchema.pre('save', function(next) {
+  if (!this.referralCode) {
+    this.referralCode = 'VY' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  }
   next();
 });
 

@@ -6,6 +6,7 @@ import {
   Wallet, TrendingUp, FileText, ArrowUpCircle, ArrowDownCircle,
   MessageCircle, Download, RefreshCw, ChevronRight, BarChart2,
   CheckCircle, Clock, XCircle, AlertCircle, Loader2, User, Save, Search,
+  Trophy, Gift,
 } from 'lucide-react';
 import { agentAPI, authAPI, pdfURL } from '../../../lib/api';
 import { getUser, setAuth, getToken } from '../../../lib/auth';
@@ -16,7 +17,7 @@ import EmptyState from '../../../components/ui/EmptyState';
 import ErrorBanner from '../../../components/ui/ErrorBanner';
 import toast from 'react-hot-toast';
 
-const TABS = ['Overview', 'Applications', 'Wallet', 'Profit', 'Profile'];
+const TABS = ['Overview', 'Applications', 'Wallet', 'Profit', 'Leaderboard', 'Profile'];
 
 export default function AgentDashboard() {
   const router = useRouter();
@@ -32,6 +33,8 @@ export default function AgentDashboard() {
   const [error,     setError]     = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [appSearch, setAppSearch] = useState('');
+  const [leaderboard, setLeaderboard] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
 
   /* Profile form */
   const [profileForm, setProfileForm] = useState({ name:'', phone:'', companyName:'', city:'', gstNumber:'' });
@@ -111,6 +114,15 @@ export default function AgentDashboard() {
   }, [wallet]);
 
   useEffect(() => { if (tab === 'Wallet') loadWallet(); }, [tab]);
+
+  useEffect(() => {
+    if (tab !== 'Leaderboard' || leaderboard) return;
+    setLeaderboardLoading(true);
+    agentAPI.getLeaderboard()
+      .then(r => setLeaderboard(r.data.data))
+      .catch(() => toast.error('Could not load leaderboard'))
+      .finally(() => setLeaderboardLoading(false));
+  }, [tab]);
 
   const handleTopUpRequest = async () => {
     const amt = Number(topUpAmt);
@@ -574,6 +586,76 @@ export default function AgentDashboard() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════
+            LEADERBOARD
+        ══════════════════════════════════════════════════════ */}
+        {tab === 'Leaderboard' && (
+          <div className="space-y-5">
+            {/* Referral card */}
+            <div className="rounded-2xl p-5 bg-gradient-to-br from-emerald-50 to-white border border-emerald-100">
+              <p className="text-sm font-bold text-emerald-700 uppercase tracking-wide flex items-center gap-2">
+                <Gift className="w-4 h-4" /> Refer & Earn
+              </p>
+              <p className="text-gray-600 text-sm mt-1">
+                {user?.referralCode
+                  ? <>Share your link — you get <strong className="text-gray-900">₹200</strong> credited to your wallet when someone you refer gets their first visa approved.</>
+                  : 'Log in again to get your personal referral link.'}
+              </p>
+              {user?.referralCode && (
+                <button
+                  onClick={() => {
+                    const link = `${window.location.origin}/auth/register?ref=${user.referralCode}`;
+                    navigator.clipboard.writeText(link);
+                    toast.success('Referral link copied!');
+                  }}
+                  className="mt-3 px-5 py-2 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white transition-all">
+                  Copy Referral Link
+                </button>
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-5 border-b border-gray-100">
+                <h3 className="font-bold text-primary flex items-center gap-2"><Trophy className="w-5 h-5" /> Top Agents by Commission</h3>
+              </div>
+              {leaderboardLoading ? (
+                <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+              ) : !leaderboard?.top?.length ? (
+                <EmptyState icon="🏆" title="No rankings yet" subtitle="Get your first approved application to appear here" />
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {leaderboard.top.map(row => (
+                    <div key={row.rank} className={`flex items-center justify-between px-5 py-3.5 ${row.isYou ? 'bg-orange-50' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                          row.rank === 1 ? 'bg-yellow-100 text-yellow-700' :
+                          row.rank === 2 ? 'bg-gray-100 text-gray-600' :
+                          row.rank === 3 ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-50 text-gray-400'
+                        }`}>{row.rank}</span>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{row.name} {row.isYou && <span className="text-orange-500">(You)</span>}</p>
+                          {row.companyName && <p className="text-xs text-gray-400">{row.companyName}</p>}
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-primary">₹{row.totalCommission?.toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                  {leaderboard.yourRank && (
+                    <div className="flex items-center justify-between px-5 py-3.5 bg-orange-50">
+                      <div className="flex items-center gap-3">
+                        <span className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold bg-gray-50 text-gray-400">{leaderboard.yourRank}</span>
+                        <p className="text-sm font-semibold text-gray-800">You</p>
+                      </div>
+                      <span className="text-sm font-bold text-primary">₹{leaderboard.yourCommission?.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

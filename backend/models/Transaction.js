@@ -9,7 +9,7 @@ const transactionSchema = new mongoose.Schema({
   type:          { type: String, enum: ['credit', 'debit'], required: true },
   category:      {
     type: String,
-    enum: ['top_up', 'visa_payment', 'commission', 'refund', 'admin_adjustment'],
+    enum: ['top_up', 'visa_payment', 'commission', 'refund', 'admin_adjustment', 'referral_bonus'],
     required: true,
   },
   amount:        { type: Number, required: true },          // always positive
