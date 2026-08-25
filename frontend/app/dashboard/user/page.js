@@ -7,7 +7,7 @@ import {
   MessageCircle, RefreshCw, Loader2, ChevronRight, AlertTriangle, PlaneTakeoff, Gift,
   FolderOpen, Trash2, FilePlus2
 } from 'lucide-react';
-import { appAPI, docAPI, downloadInvoice, downloadApplicationPack, uploadsOrigin } from '../../../lib/api';
+import { appAPI, docAPI, downloadInvoice, downloadApplicationPack, openApplicationDocument, uploadsOrigin } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import { waTrack } from '../../../lib/whatsapp';
 import StatusBadge from '../../../components/ui/StatusBadge';
@@ -332,11 +332,11 @@ export default function UserDashboard() {
                                 <p className="text-xs text-white/70">Dispatched to your email — download it below.</p>
                               </div>
                             </div>
-                            <a href={`${uploadsOrigin}/${visaDoc.path.replace(/\\/g, '/').replace(/^.*uploads\//, 'uploads/')}`}
-                              target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                            <button
+                              onClick={e => { e.stopPropagation(); openApplicationDocument(app._id, 'visaDocument').catch(() => toast.error('Could not open document')); }}
                               className="flex-shrink-0 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 transition-colors">
                               <Download className="w-4 h-4" /> Download
-                            </a>
+                            </button>
                           </div>
                         )}
 

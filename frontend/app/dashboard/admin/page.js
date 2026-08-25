@@ -88,6 +88,7 @@ export default function AdminDashboard() {
   const [editApp,    setEditApp]    = useState(null);
   const [editForm,   setEditForm]   = useState({});
   const [saving,     setSaving]     = useState(false);
+  const [docSignedUrls, setDocSignedUrls] = useState({}); // { [docType]: signedUrl }
 
   /* Edit agent modal */
   const [editAgent,  setEditAgent]  = useState(null);
@@ -109,6 +110,20 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => { if (tab === 'Visa Rules' && visaRules.length === 0) loadVisaRules(); }, [tab]);
+
+  // Uploaded documents are no longer served from a public path — mint a
+  // short-lived signed URL per document whenever the Edit Application
+  // modal opens with a set of documents to show.
+  useEffect(() => {
+    if (!editApp?.documents?.length) { setDocSignedUrls({}); return; }
+    let cancelled = false;
+    Promise.all(editApp.documents.map(d =>
+      appAPI.getDocumentSignedUrl(editApp._id, d.docType)
+        .then(r => [d.docType, `${uploadsOrigin}${r.data.url}`])
+        .catch(() => [d.docType, null]),
+    )).then(pairs => { if (!cancelled) setDocSignedUrls(Object.fromEntries(pairs)); });
+    return () => { cancelled = true; };
+  }, [editApp?._id]);
 
   const verifyRule = async (id) => {
     setBusyRuleId(id);
@@ -1274,13 +1289,15 @@ export default function AdminDashboard() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {editApp.documents.map((doc, i) => {
-                    const url = `${uploadsOrigin}/${doc.path.replace(/\\/g, '/').replace(/^.*uploads\//, 'uploads/')}`;
+                    const url = docSignedUrls[doc.docType];
                     const isImage = doc.mimetype?.startsWith('image/');
                     return (
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                      <a key={i} href={url || '#'} target="_blank" rel="noopener noreferrer"
+                        onClick={e => { if (!url) e.preventDefault(); }}
                         className="group relative rounded-xl border border-gray-200 overflow-hidden hover:border-primary hover:shadow-md transition-all">
                         {isImage ? (
-                          <img src={url} alt={doc.docType} className="w-full h-24 object-cover" />
+                          url ? <img src={url} alt={doc.docType} className="w-full h-24 object-cover" />
+                              : <div className="w-full h-24 bg-gray-50 animate-pulse" />
                         ) : (
                           <div className="w-full h-24 bg-gray-50 flex items-center justify-center">
                             <File className="w-8 h-8 text-gray-300" />

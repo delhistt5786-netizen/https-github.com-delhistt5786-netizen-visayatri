@@ -143,6 +143,7 @@ export const appAPI = {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
   requestDocuments: (id, data) => api.post(`/applications/${id}/request-documents`, data),
+  getDocumentSignedUrl: (id, docType) => api.get(`/applications/${id}/documents/${docType}/signed-url`),
   getAll: (params) => withMock(() => api.get('/applications', { params }), () => ({ data: mockData.MOCK_APPLICATIONS })),
   edit: (id, data) => api.put(`/applications/${id}`, data),
   track: (applicationId, email) => api.get('/applications/track', { params: { applicationId, email } }),
@@ -217,5 +218,13 @@ export const downloadInvoice = (appId, applicationId) =>
 
 export const downloadApplicationPack = (appId, applicationId) =>
   downloadBlob(`/pdf/pack/${appId}`, `VY-${applicationId}-Documents.zip`);
+
+// Opens an application document (passport scan, visa file, etc.) in a new
+// tab via a freshly-minted short-lived signed URL — uploaded files are no
+// longer served from a public, unauthenticated path.
+export const openApplicationDocument = async (appId, docType) => {
+  const r = await api.get(`/applications/${appId}/documents/${docType}/signed-url`);
+  window.open(`${uploadsOrigin}${r.data.url}`, '_blank', 'noopener,noreferrer');
+};
 
 export default api;

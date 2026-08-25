@@ -13,6 +13,7 @@ const { debitWallet, creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
 const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
 const { buildInvoicePDF } = require('../utils/invoicePdf');
+const { signFileToken } = require('../utils/fileSignature');
 
 const PHOTO_DOC_TYPES = new Set(['photo', 'digitalPhoto']);
 const REFERRAL_REWARD = 200; // ₹ credited to the referrer's wallet on the referee's first approval
@@ -253,7 +254,32 @@ router.get('/my/avatar', protect, async (req, res) => {
     const photoDoc = app?.documents?.find(d => d.docType === 'digitalPhoto');
     if (!photoDoc) return res.json({ success: true, avatarUrl: null });
 
-    res.json({ success: true, avatarUrl: `/uploads/${app._id}/${photoDoc.storedName}` });
+    const token = signFileToken(photoDoc.path);
+    res.json({ success: true, avatarUrl: `/api/files/serve/${token}` });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ─────────────────────────────────────────────────────────
+   GET /api/applications/:id/documents/:docType/signed-url
+   Mints a short-lived signed URL for one document on an application,
+   after checking the requester owns it (or is the assigned agent / admin).
+───────────────────────────────────────────────────────── */
+router.get('/:id/documents/:docType/signed-url', protect, async (req, res) => {
+  try {
+    const app = await Application.findById(req.params.id);
+    if (!app) return res.status(404).json({ success: false, message: 'Application not found.' });
+
+    const isOwner = app.userId.toString() === req.user._id.toString();
+    const isAgent = app.agentId && app.agentId.toString() === req.user._id.toString();
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAgent && !isAdmin)
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+
+    const doc = app.documents.find(d => d.docType === req.params.docType);
+    if (!doc) return res.status(404).json({ success: false, message: 'Document not found.' });
+
+    const token = signFileToken(doc.path);
+    res.json({ success: true, url: `/api/files/serve/${token}` });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 

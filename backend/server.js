@@ -1,7 +1,6 @@
 const express     = require('express');
 const mongoose    = require('mongoose');
 const cors        = require('cors');
-const path        = require('path');
 const helmet      = require('helmet');
 const rateLimit   = require('express-rate-limit');
 require('dotenv').config();
@@ -62,10 +61,12 @@ app.use('/api/payments/webhook', express.raw({ type: '*/*' }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-/* ── Static uploads ───────────────────────────────────────── */
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 /* ── Routes ───────────────────────────────────────────────── */
+// NOTE: uploaded files (passport scans, photos, etc.) are no longer served
+// via a public express.static('/uploads') mount — that had no access
+// control beyond an unguessable filename. See routes/files.js for the
+// signed-URL replacement (section 40: "signed/temporary document URLs").
+app.use('/api/files', require('./routes/files'));
 app.use('/api/auth',         require('./routes/auth'));
 app.use('/api/countries',    require('./routes/countries'));
 app.use('/api/visas',        require('./routes/visas'));
