@@ -5,7 +5,7 @@ import {
   Users, FileText, Globe, DollarSign, TrendingUp, ArrowUpCircle,
   RefreshCw, CheckCircle, XCircle, MessageCircle, Edit2, Save, X,
   Loader2, BarChart2, Search, Filter, ExternalLink, ShieldCheck, File,
-  UserPlus, Download, Upload, PlaneTakeoff, FilePlus2, Trash2,
+  UserPlus, Download, Upload, PlaneTakeoff, FilePlus2, Trash2, Mail,
 } from 'lucide-react';
 import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, authAPI, uploadsOrigin, openAgentKycDocument } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
@@ -315,7 +315,11 @@ export default function AdminDashboard() {
   /* ── Request additional documents from applicant ────────── */
   const [docsRequestForm, setDocsRequestForm] = useState({ items: '', note: '' });
   const [requestingDocs, setRequestingDocs] = useState(false);
-  const requestDocuments = useCallback(async () => {
+  // The request is always emailed to the applicant automatically (backend
+  // best-effort) — `alsoWhatsapp` just controls whether we additionally pop
+  // open a WhatsApp tab, since WhatsApp isn't fully set up yet and admins
+  // shouldn't have it forced open on every single request.
+  const requestDocuments = useCallback(async (alsoWhatsapp = false) => {
     const items = docsRequestForm.items.split(',').map(s => s.trim()).filter(Boolean);
     if (!items.length) { toast.error('Enter at least one document, comma-separated'); return; }
     setRequestingDocs(true);
@@ -325,7 +329,7 @@ export default function AdminDashboard() {
       setApps(prev => prev.map(a => a._id === editApp._id ? r.data.data : a));
       setEditApp(r.data.data);
       setDocsRequestForm({ items: '', note: '' });
-      window.open(r.data.whatsappLink, '_blank');
+      if (alsoWhatsapp && r.data.whatsappLink) window.open(r.data.whatsappLink, '_blank');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to send request');
     } finally { setRequestingDocs(false); }
@@ -1461,11 +1465,21 @@ export default function AdminDashboard() {
                 placeholder="Comma-separated, e.g. Bank statement, Hotel booking" className="input-field text-sm" />
               <input value={docsRequestForm.note} onChange={e => setDocsRequestForm({...docsRequestForm, note: e.target.value})}
                 placeholder="Note (optional)" className="input-field text-sm" />
-              <button onClick={requestDocuments} disabled={requestingDocs}
-                className="w-full py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
-                {requestingDocs ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
-                {requestingDocs ? 'Sending…' : 'Request via Email + WhatsApp'}
-              </button>
+              {/* Email always goes automatically — WhatsApp is a separate,
+                  opt-in button since it isn't fully set up yet and admins
+                  shouldn't get a tab forced open on every request. */}
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => requestDocuments(false)} disabled={requestingDocs}
+                  className="py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {requestingDocs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  {requestingDocs ? 'Sending…' : 'Request via Email'}
+                </button>
+                <button onClick={() => requestDocuments(true)} disabled={requestingDocs}
+                  className="py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  {requestingDocs ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                  {requestingDocs ? 'Sending…' : 'Email + WhatsApp'}
+                </button>
+              </div>
             </div>
 
             {/* Upload final visa document */}
