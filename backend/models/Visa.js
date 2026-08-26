@@ -15,6 +15,7 @@ const planSchema = new mongoose.Schema({
   agentPrice:  { type: Number, required: true, default: 0 }, // agent-facing
   publicPrice: { type: Number, required: true, default: 0 }, // B2C public
   isContactUs: { type: Boolean, default: false },  // show "Contact Us" if true
+  agentOnly:   { type: Boolean, default: false },  // e.g. "Sureshot" — hidden from B2C, agents (and admin) only
 }, { _id: false });
 
 const visaSchema = new mongoose.Schema({
@@ -42,13 +43,17 @@ const visaSchema = new mongoose.Schema({
 // Used in routes to strip basePrice from non-admin responses
 visaSchema.methods.forRole = function(role) {
   const obj = this.toObject();
-  obj.plans = obj.plans.map(p => {
+  const canSeeAgentOnly = role === 'agent' || role === 'admin';
+  obj.plans = obj.plans
+    .filter(p => canSeeAgentOnly || !p.agentOnly)
+    .map(p => {
     const plan = { label: p.label, isContactUs: p.isContactUs };
     if (role === 'admin') {
       plan.basePrice   = p.basePrice;
       plan.agentPrice  = p.agentPrice;
       plan.publicPrice = p.publicPrice;
       plan.margin      = p.publicPrice - p.basePrice;
+      plan.agentOnly   = p.agentOnly;
     } else if (role === 'agent') {
       plan.price       = p.agentPrice;   // agent pays this
       plan.publicPrice = p.publicPrice;  // agent can see markup potential

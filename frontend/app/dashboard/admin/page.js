@@ -970,9 +970,10 @@ export default function AdminDashboard() {
                       <td className="px-4 py-3 font-semibold">{v.flag} {v.country}</td>
                       <td className="px-4 py-3 text-xs text-gray-500 capitalize">{v.region}</td>
                       <td className="px-4 py-3 text-xs text-gray-500 max-w-xs">
-                        {v.plans?.length > 0 ? v.plans.map(p => p.isContactUs
+                        {v.plans?.length > 0 ? v.plans.map(p => (p.isContactUs
                           ? `${p.label}: Contact Us`
                           : `${p.label}: ₹${p.basePrice}/₹${p.agentPrice}/₹${p.publicPrice}`
+                        ) + (p.agentOnly ? ' (Agent Only)' : '')
                         ).join(' • ') : 'No plans'}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-400">{v.processingTime}</td>
@@ -992,7 +993,8 @@ export default function AdminDashboard() {
                                 basePrice: p.basePrice || 0,
                                 agentPrice: p.agentPrice || 0,
                                 publicPrice: p.publicPrice || 0,
-                                isContactUs: p.isContactUs || false
+                                isContactUs: p.isContactUs || false,
+                                agentOnly: p.agentOnly || false
                               })) || []
                             });
                           }}
@@ -1625,7 +1627,19 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               {visaForm.plans?.map((plan, index) => (
                 <div key={index} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                  <h4 className="font-semibold text-primary">{plan.label}</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold text-primary">{plan.label}</h4>
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input type="checkbox" checked={!!plan.agentOnly}
+                        onChange={e => {
+                          const newPlans = [...visaForm.plans];
+                          newPlans[index].agentOnly = e.target.checked;
+                          setVisaForm({...visaForm, plans: newPlans});
+                        }}
+                        className="w-3.5 h-3.5 accent-primary" />
+                      Agent Only (hide from B2C)
+                    </label>
+                  </div>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
                       <label className="text-xs font-semibold text-gray-600 mb-1 block">Base Price (₹)</label>
@@ -1808,7 +1822,7 @@ export default function AdminDashboard() {
                 <label className="text-xs font-semibold text-gray-600 block">Pricing Plans</label>
                 <button type="button" onClick={() => setNewVisaForm({
                     ...newVisaForm,
-                    plans: [...newVisaForm.plans, { label: '', basePrice: 0, agentPrice: 0, publicPrice: 0, isContactUs: false }],
+                    plans: [...newVisaForm.plans, { label: '', basePrice: 0, agentPrice: 0, publicPrice: 0, isContactUs: false, agentOnly: false }],
                   })}
                   className="text-xs font-bold text-primary hover:underline">+ Add Plan</button>
               </div>
@@ -1841,6 +1855,12 @@ export default function AdminDashboard() {
                             onChange={e => updatePlan('isContactUs', e.target.checked)}
                             className="w-3.5 h-3.5 accent-primary" />
                           Contact Us (no fixed price)
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <input type="checkbox" checked={!!plan.agentOnly}
+                            onChange={e => updatePlan('agentOnly', e.target.checked)}
+                            className="w-3.5 h-3.5 accent-primary" />
+                          Agent Only (hide from B2C)
                         </label>
                         {!plan.isContactUs && (
                           <div className="grid grid-cols-3 gap-2">
