@@ -351,16 +351,47 @@ export default function VisaDetailPage() {
               return (
                 <div className="soft-card space-y-5">
                   <h3 className="text-lg font-bold text-[#0B3C5D] flex items-center gap-2">
-                    <MapPin className="w-5 h-5 text-[#FF7A00]" /> Trip Summary
+                    <MapPin className="w-5 h-5 text-[#FF7A00]" /> Plan Your Trip
                   </h3>
+
+                  {/* Quick date/purpose entry — bound to the SAME form state
+                      as the official application form's own Travel
+                      Information fields further down (single source of
+                      truth, not a duplicate field). Filling either updates
+                      both; nothing here changes the official form itself. */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Departure</label>
+                      <input type="date" value={form.travelDate}
+                        onChange={e => setForm({ ...form, travelDate: e.target.value })}
+                        className="input-field text-sm w-full" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Return</label>
+                      <input type="date" value={form.returnDate}
+                        onChange={e => setForm({ ...form, returnDate: e.target.value })}
+                        className="input-field text-sm w-full" />
+                    </div>
+                    <div className="col-span-2 sm:col-span-1">
+                      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Purpose</label>
+                      <select value={form.purposeOfVisit}
+                        onChange={e => setForm({ ...form, purposeOfVisit: e.target.value })}
+                        className="input-field text-sm w-full">
+                        <option value="Tourism">Tourism</option>
+                        <option value="Business">Business</option>
+                        <option value="Study">Study</option>
+                        <option value="Work">Work</option>
+                        <option value="Medical">Medical</option>
+                        <option value="Visit Family">Visit Family</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                     <div><p className="text-gray-400 text-xs">Destination</p><p className="font-semibold">{visa.flag} {visa.country}</p></div>
                     <div><p className="text-gray-400 text-xs">Official Visa Type</p><p className="font-semibold">{rule?.officialVisaName || visa.visaType}</p></div>
-                    <div><p className="text-gray-400 text-xs">Purpose</p><p className="font-semibold">{form.purposeOfVisit || '—'}</p></div>
-                    <div><p className="text-gray-400 text-xs">Departure</p><p className="font-semibold">{form.travelDate || '—'}</p></div>
-                    <div><p className="text-gray-400 text-xs">Return</p><p className="font-semibold">{form.returnDate || '—'}</p></div>
-                    <div><p className="text-gray-400 text-xs">Trip Duration</p><p className="font-semibold">{tripDays != null ? `${tripDays} day${tripDays === 1 ? '' : 's'}` : '—'}</p></div>
+                    <div><p className="text-gray-400 text-xs">Trip Duration</p><p className="font-semibold">{tripDays != null ? `${tripDays} day${tripDays === 1 ? '' : 's'}` : 'Pick dates above'}</p></div>
                     {rule && (
                       <>
                         <div><p className="text-gray-400 text-xs">Visa Validity</p><p className="font-semibold">{rule.validityPeriod?.value} {rule.validityPeriod?.unit}</p></div>
