@@ -1,4 +1,11 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Render's network resolves smtp.gmail.com to an IPv6 address it then can't
+// actually route to (ENETUNREACH) — force Node to prefer IPv4 results so
+// outbound SMTP connections use a route that works. Safe globally; nothing
+// else in this app depends on IPv6 being preferred.
+if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
 
 /**
  * Best-effort email sender. If SMTP isn't configured (no SMTP_HOST/USER/PASS
@@ -13,6 +20,7 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
     port: Number(process.env.SMTP_PORT) || 587,
     secure: Number(process.env.SMTP_PORT) === 465,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    family: 4, // belt-and-suspenders alongside dns.setDefaultResultOrder above
   });
 }
 
