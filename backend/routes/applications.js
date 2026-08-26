@@ -11,7 +11,7 @@ const { handleUpload }       = require('../middleware/upload');
 const { checkFaceCoverage }  = require('../middleware/faceCheck');
 const { debitWallet, creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
-const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested, mailApplicationSubmitted, mailDocumentsBackup } = require('../utils/mailer');
+const { mailVisaApproved, mailVisaRejected, mailVisaDocumentReady, mailDocumentsRequested, mailApplicationSubmitted, mailDocumentsBackup } = require('../utils/mailer');
 const { buildInvoicePDF } = require('../utils/invoicePdf');
 const { signFileToken } = require('../utils/fileSignature');
 
@@ -513,12 +513,23 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
       whatsappLink = wa.statusUpdateToApplicantMessage(
         app.applicationId, app.applicantName, app.applicantPhone, status, app.visaId?.country || 'visa',
       );
+      // Rejection is the other transactional outcome that also gets an
+      // automatic email (not just a WhatsApp link the admin has to send
+      // manually) — same reasoning as the approval email above.
+      if (status === 'rejected') {
+        try {
+          emailResult = await mailVisaRejected(app);
+        } catch (mailErr) {
+          console.error('[applications] rejection email failed:', mailErr.message);
+        }
+      }
     }
 
+    const emailAware = justApproved || status === 'rejected';
     res.json({
       success: true, data: app, whatsappLink,
-      message: justApproved
-        ? `Status updated to "approved"${emailResult.sent ? ' — email sent' : ' (email not configured, use WhatsApp)'}`
+      message: emailAware
+        ? `Status updated to "${status}"${emailResult.sent ? ' — email sent' : ' (email not configured, use WhatsApp)'}`
         : `Status updated to "${status}"`,
     });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

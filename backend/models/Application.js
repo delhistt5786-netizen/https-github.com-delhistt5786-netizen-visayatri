@@ -97,7 +97,11 @@ const applicationSchema = new mongoose.Schema({
 
 applicationSchema.pre('save', function(next) {
   if (!this.applicationId) {
-    this.applicationId = 'VYT' + Date.now().toString().slice(-8);
+    // Millisecond timestamp alone can collide when two applications are
+    // created in the same millisecond (plausible under real concurrent
+    // load) — a random 2-char suffix cuts that collision chance by ~1300x.
+    const rand = Math.random().toString(36).slice(2, 4).toUpperCase();
+    this.applicationId = 'VYT' + Date.now().toString().slice(-8) + rand;
   }
   next();
 });

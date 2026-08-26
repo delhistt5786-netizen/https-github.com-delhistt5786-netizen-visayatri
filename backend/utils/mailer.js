@@ -69,6 +69,17 @@ const mailVisaApproved = (app, invoicePdfBuffer) => sendMail({
     : undefined,
 });
 
+const mailVisaRejected = (app) => sendMail({
+  to: app.applicantEmail,
+  subject: `Update on your application ${app.applicationId}`,
+  html: wrap('Application update', `
+    <p>Hi ${app.applicantName},</p>
+    <p>We're sorry to let you know that your visa application <b>${app.applicationId}</b> could not be approved.</p>
+    ${app.rejectionReason ? `<p><b>Reason:</b> ${app.rejectionReason}</p>` : ''}
+    <p>If you'd like to discuss this or try again, reply on WhatsApp or contact our support team — we're happy to help.</p>
+  `),
+});
+
 const mailVisaDocumentReady = (app) => sendMail({
   to: app.applicantEmail,
   subject: `Your ${app.applicationId} visa is ready 🎉`,
@@ -147,6 +158,6 @@ const mailDocumentsRequested = (app, items, note) => sendMail({
 });
 
 module.exports = {
-  sendMail, mailPasswordReset, mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested,
+  sendMail, mailPasswordReset, mailVisaApproved, mailVisaRejected, mailVisaDocumentReady, mailDocumentsRequested,
   mailApplicationSubmitted, mailDocumentsBackup,
 };
