@@ -6,24 +6,31 @@ Visayatri application — **maximum safe automation only**. It never
 completes a CAPTCHA, OTP, payment, or biometric step, and it never
 clicks a final submit button on your behalf.
 
-## Status: Pilot — Vietnam eVisa only
+## Status: Architecture complete for 33 of 36 countries — ZERO verified
 
-This is a first pilot covering one portal
-(`evisa.xuatnhapcanh.gov.vn`) to prove out the architecture. Adding
-another country means adding one entry to `portal-mappings.js` — no
-other code changes needed.
+`portal-mappings.js` now has an entry for every researched country
+that has a genuine online self-serve form (33 of 36 — see "Not
+included" below for the other 3 and why). Adding a country beyond
+that means adding one entry — no other code changes needed.
 
-## ⚠️ Before you rely on this for real applications
+## ⚠️ Before you rely on this for real applications — READ THIS
 
-The Vietnam field selectors in `portal-mappings.js` are **best-guess
-placeholders**, written without being able to open the real portal in
-a browser. They were not verified against the live DOM. Expect the
-"Assist Application" button to report most fields as "not found" the
-first time you try it on the real site — that's the extension's
-portal-change-detection working correctly (it refuses to guess), not
-a bug.
+**None of the 33 entries have been verified against a live portal.**
+Every `selector` in `portal-mappings.js` is a guess at common
+government-form field-naming conventions (`name="firstName"`,
+`#passportNumber`, etc.), written without ever opening any of these
+33 sites in a browser. Treat every entry as a TODO, not a finished
+integration — Vietnam included, despite being the original "worked
+example" pilot; it was never actually checked against the live DOM
+either.
 
-**To make it actually work on Vietnam's real form:**
+Expect the "Assist Application" button to report most fields as "not
+found" the first time you try it on any real site — that's the
+extension's portal-change-detection working correctly (it refuses to
+guess), not a bug. Work through them one country at a time, starting
+with whichever you process the most applications for.
+
+**To make a country's mapping actually work on its real form:**
 
 1. Load the extension (steps below) and open
    `https://evisa.xuatnhapcanh.gov.vn` and get to the actual
@@ -78,10 +85,19 @@ a bug.
   applications, select one to hand off to the active tab's content
   script.
 
+## Not included (3 countries)
+
+- **Japan** — visa is submitted via VFS Japan in person/by courier,
+  not a self-serve web form; nothing for a form-fill extension to do.
+- **Singapore** — submitted through an authorized visa agent network
+  (VFS Global / IVS Global), not a direct government form.
+- **Cuba** — no official government portal could be confidently
+  identified during research; add an entry once one is found.
+
 ## What's NOT built yet
 
-- Only one portal is mapped (Vietnam). The other 35 researched
-  countries need the same inspect-and-map treatment.
+- **All 33 mapped portals need a real inspect-and-map pass** — see
+  the warning above. This is the actual bulk of remaining work.
 - No real audit-log backend endpoint yet — `LOG_EVENT` messages
   currently just `console.info` rather than persisting anywhere (see
   the comment in `background.js`).
