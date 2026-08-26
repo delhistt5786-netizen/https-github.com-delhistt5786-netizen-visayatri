@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle, Clock, ArrowLeft, MessageCircle, ChevronDown, TrendingUp, Wallet, CreditCard, Calendar, FileText, Users, Shield, MapPin, Zap } from 'lucide-react';
-import { visaAPI, appAPI } from '../../../lib/api';
+import { CheckCircle, Clock, ArrowLeft, MessageCircle, ChevronDown, TrendingUp, Wallet, CreditCard, Calendar, FileText, Users, Shield, MapPin, Zap, ShieldCheck, AlertTriangle, Circle } from 'lucide-react';
+import { visaAPI, appAPI, visaRuleAPI } from '../../../lib/api';
 import { waApply, waAgentApply } from '../../../lib/whatsapp';
 import { getUser, setAuth } from '../../../lib/auth';
 import Loading from '../../../components/ui/Loading';
@@ -82,6 +82,13 @@ export default function VisaDetailPage() {
       if (first) setSelectedPlan(first);
       setLoading(false);
     }).catch(() => { setLoading(false); router.push('/visa'); });
+  }, [slug]);
+
+  // Additive trip-summary sidebar data only — does not affect the official
+  // application form's fields, order, or validation logic in any way.
+  const [officialRules, setOfficialRules] = useState([]);
+  useEffect(() => {
+    visaRuleAPI.getByCountry(slug).then(r => setOfficialRules(r.data.data || [])).catch(() => setOfficialRules([]));
   }, [slug]);
 
   const basePrice = isAgent ? selectedPlan?.price : (selectedPlan?.price || selectedPlan?.publicPrice);
@@ -318,6 +325,99 @@ export default function VisaDetailPage() {
 
           {/* LEFT: Main Content Tabs */}
           <div className="lg:col-span-3 space-y-8">
+
+            {/* ── Trip Summary + Document Progress (additive UX layer) ──
+                Reads existing form/documents/visa state and the existing
+                official VisaRule data — never adds fields to, reorders, or
+                otherwise changes the official application form itself. */}
+            {(() => {
+              const rule = officialRules[0]; // country-level reference rule
+              const tripDays = form.travelDate && form.returnDate
+                ? Math.round((new Date(form.returnDate) - new Date(form.travelDate)) / (1000 * 60 * 60 * 24))
+                : null;
+              const exceedsMaxStay = tripDays != null && rule?.maximumStay?.value != null && tripDays > rule.maximumStay.value;
+
+              const docChecklist = rule?.requiredDocuments?.length
+                ? rule.requiredDocuments
+                : (visa.requirements || []).map(r => ({ documentName: r, critical: false }));
+              const DOC_TYPE_BY_NAME = { passport: 'frontPassport', photo: 'digitalPhoto', 'bank statement': null };
+              const isLikelyUploaded = (name) => {
+                const n = name.toLowerCase();
+                if (n.includes('passport')) return !!(documents.frontPassport && documents.backPassport);
+                if (n.includes('photo')) return !!documents.digitalPhoto;
+                return null; // unknown mapping — show as informational only, not a false "missing"
+              };
+
+              return (
+                <div className="soft-card space-y-5">
+                  <h3 className="text-lg font-bold text-[#0B3C5D] flex items-center gap-2">
+                    <MapPin className="w-5 h-5 text-[#FF7A00]" /> Trip Summary
+                  </h3>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                    <div><p className="text-gray-400 text-xs">Destination</p><p className="font-semibold">{visa.flag} {visa.country}</p></div>
+                    <div><p className="text-gray-400 text-xs">Official Visa Type</p><p className="font-semibold">{rule?.officialVisaName || visa.visaType}</p></div>
+                    <div><p className="text-gray-400 text-xs">Purpose</p><p className="font-semibold">{form.purposeOfVisit || '—'}</p></div>
+                    <div><p className="text-gray-400 text-xs">Departure</p><p className="font-semibold">{form.travelDate || '—'}</p></div>
+                    <div><p className="text-gray-400 text-xs">Return</p><p className="font-semibold">{form.returnDate || '—'}</p></div>
+                    <div><p className="text-gray-400 text-xs">Trip Duration</p><p className="font-semibold">{tripDays != null ? `${tripDays} day${tripDays === 1 ? '' : 's'}` : '—'}</p></div>
+                    {rule && (
+                      <>
+                        <div><p className="text-gray-400 text-xs">Visa Validity</p><p className="font-semibold">{rule.validityPeriod?.value} {rule.validityPeriod?.unit}</p></div>
+                        <div><p className="text-gray-400 text-xs">Maximum Stay</p><p className="font-semibold">{rule.maximumStay?.value} {rule.maximumStay?.unit}</p></div>
+                        <div><p className="text-gray-400 text-xs">Entry Type</p><p className="font-semibold capitalize">{rule.entryType}</p></div>
+                        <div><p className="text-gray-400 text-xs">Government Fee</p><p className="font-semibold">{rule.governmentFee?.amount != null ? `${rule.governmentFee.currency} ${rule.governmentFee.amount}` : 'Verification required'}</p></div>
+                      </>
+                    )}
+                    {selectedPlan && (
+                      <div><p className="text-gray-400 text-xs">Visayatri Price</p><p className="font-semibold text-[#FF7A00]">{selectedPlan.isContactUs ? 'Contact us' : `₹${(selectedPlan.price || selectedPlan.publicPrice || 0).toLocaleString('en-IN')}`}</p></div>
+                    )}
+                  </div>
+
+                  {tripDays != null && rule?.maximumStay?.value != null && (
+                    exceedsMaxStay ? (
+                      <div className="flex gap-2 rounded-xl bg-amber-50 border border-amber-100 p-3 text-xs text-amber-800">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>This visa's maximum stay ({rule.maximumStay.value} {rule.maximumStay.unit}) may not cover your selected {tripDays}-day trip. Consider a longer-stay product if available, or double-check with the official portal.</span>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2 rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-xs text-emerald-800">
+                        <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                        <span>Suitable based on configured rules — your {tripDays}-day trip is within the {rule.maximumStay.value}-{rule.maximumStay.unit} maximum stay.</span>
+                      </div>
+                    )
+                  )}
+
+                  {docChecklist.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5" /> Document Checklist
+                      </p>
+                      <ul className="space-y-1.5">
+                        {docChecklist.map((d, i) => {
+                          const name = d.documentName || d;
+                          const uploaded = isLikelyUploaded(name);
+                          return (
+                            <li key={i} className="flex items-center gap-2 text-xs">
+                              {uploaded === true ? <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                : uploaded === false ? <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                                : <Circle className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />}
+                              <span className={d.critical ? 'font-semibold' : ''}>{d.critical ? '⭐ ' : ''}{name}</span>
+                              {uploaded === true && <span className="text-emerald-600 ml-auto">Uploaded</span>}
+                              {uploaded === false && <span className="text-amber-600 ml-auto">Missing</span>}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
+                  <p className="text-[10px] text-gray-400 leading-relaxed">
+                    Visa approval is solely at the discretion of the relevant government/immigration authority. This summary is informational and does not promise approval.
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* Tabs/Sections Navigation */}
             <div className="flex gap-2 border-b border-gray-200 overflow-x-auto pb-0">
