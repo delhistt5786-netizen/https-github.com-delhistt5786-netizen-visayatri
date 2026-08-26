@@ -242,6 +242,17 @@ export default function VisaDetailPage() {
 
   const hasRealPlans = visa.plans?.some(p => !p.isContactUs);
 
+  // Shared date-bound guards for BOTH the Trip Summary quick-entry and the
+  // official form's own Travel Date / Return Date fields below — fixes a
+  // real bug where return date could be picked before departure (negative
+  // trip duration) or arbitrarily far beyond the visa's max stay.
+  const todayStr = new Date().toISOString().split('T')[0];
+  const primaryRule = officialRules[0];
+  const maxStayDays = primaryRule?.maximumStay?.unit === 'days' ? primaryRule.maximumStay.value : null;
+  const maxReturnDateStr = form.travelDate && maxStayDays
+    ? new Date(new Date(form.travelDate).getTime() + maxStayDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    : undefined;
+
   return (
     <div className="min-h-screen bg-white">
       {/* Premium Dark Hero Header */}
@@ -331,10 +342,14 @@ export default function VisaDetailPage() {
                 official VisaRule data — never adds fields to, reorders, or
                 otherwise changes the official application form itself. */}
             {(() => {
-              const rule = officialRules[0]; // country-level reference rule
-              const tripDays = form.travelDate && form.returnDate
+              const rule = primaryRule; // country-level reference rule
+              const rawTripDays = form.travelDate && form.returnDate
                 ? Math.round((new Date(form.returnDate) - new Date(form.travelDate)) / (1000 * 60 * 60 * 24))
                 : null;
+              // The min/max date-input guards above should prevent this in
+              // normal use, but never show a negative duration regardless.
+              const invalidDates = rawTripDays != null && rawTripDays < 0;
+              const tripDays = invalidDates ? null : rawTripDays;
               const exceedsMaxStay = tripDays != null && rule?.maximumStay?.value != null && tripDays > rule.maximumStay.value;
 
               const docChecklist = rule?.requiredDocuments?.length
@@ -362,13 +377,18 @@ export default function VisaDetailPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Departure</label>
-                      <input type="date" value={form.travelDate}
-                        onChange={e => setForm({ ...form, travelDate: e.target.value })}
+                      <input type="date" value={form.travelDate} min={todayStr}
+                        onChange={e => {
+                          const val = e.target.value;
+                          // Clear an existing return date if it's now before the new departure — never allow a negative trip.
+                          const clearReturn = form.returnDate && val && form.returnDate < val;
+                          setForm({ ...form, travelDate: val, returnDate: clearReturn ? '' : form.returnDate });
+                        }}
                         className="input-field text-sm w-full" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1">Return</label>
-                      <input type="date" value={form.returnDate}
+                      <input type="date" value={form.returnDate} min={form.travelDate || todayStr} max={maxReturnDateStr}
                         onChange={e => setForm({ ...form, returnDate: e.target.value })}
                         className="input-field text-sm w-full" />
                     </div>
@@ -404,6 +424,13 @@ export default function VisaDetailPage() {
                       <div><p className="text-gray-400 text-xs">Visayatri Price</p><p className="font-semibold text-[#FF7A00]">{selectedPlan.isContactUs ? 'Contact us' : `₹${(selectedPlan.price || selectedPlan.publicPrice || 0).toLocaleString('en-IN')}`}</p></div>
                     )}
                   </div>
+
+                  {invalidDates && (
+                    <div className="flex gap-2 rounded-xl bg-red-50 border border-red-100 p-3 text-xs text-red-700">
+                      <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <span>Return date can't be before your departure date — please pick a valid return date.</span>
+                    </div>
+                  )}
 
                   {tripDays != null && rule?.maximumStay?.value != null && (
                     exceedsMaxStay ? (
@@ -753,13 +780,18 @@ export default function VisaDetailPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Travel Date *</label>
-                        <input type="date" required
-                          value={form.travelDate} onChange={e => setForm({ ...form, travelDate: e.target.value })}
+                        <input type="date" required min={todayStr}
+                          value={form.travelDate}
+                          onChange={e => {
+                            const val = e.target.value;
+                            const clearReturn = form.returnDate && val && form.returnDate < val;
+                            setForm({ ...form, travelDate: val, returnDate: clearReturn ? '' : form.returnDate });
+                          }}
                           className="input-field text-sm w-full" />
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-700 uppercase tracking-wide block">Return Date *</label>
-                        <input type="date" required
+                        <input type="date" required min={form.travelDate || todayStr} max={maxReturnDateStr}
                           value={form.returnDate} onChange={e => setForm({ ...form, returnDate: e.target.value })}
                           className="input-field text-sm w-full" />
                       </div>
