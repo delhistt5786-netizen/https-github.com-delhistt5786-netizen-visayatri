@@ -172,10 +172,13 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="relative space-y-4">
+            <div className="relative">
               {/* Width intentionally matches the floating-card below (no max-w
                   cap) so the two right-column boxes align edge-to-edge instead
-                  of the login box looking undersized next to a wider card. */}
+                  of the login box looking undersized next to a wider card.
+                  No space-y here — the floating card's own mt-8 plus the
+                  "24/7" badge's -top-5 poke need the full, unconflicting gap
+                  below the login box, or the badge overlaps into it. */}
               <div className="hidden lg:block">
                 {user ? (
                   <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl p-4 flex items-center justify-between gap-3">

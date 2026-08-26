@@ -39,7 +39,7 @@ export default function TrackApplicationPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 -mt-8 pb-20">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8 -mt-4 pb-20">
         <form onSubmit={submit} className="bg-white rounded-2xl shadow-lg border border-slate-100 p-6 space-y-4">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Application ID</label>
