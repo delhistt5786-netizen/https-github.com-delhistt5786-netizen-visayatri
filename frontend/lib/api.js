@@ -177,6 +177,7 @@ export const adminAPI = {
   getSettings: () => withMock(() => api.get('/admin/settings'), () => ({ data: { serviceFeeEnabled: true, serviceFee: 599 } })),
   updateSettings: (data) => api.put('/admin/settings', data),
   getVisaRules: () => api.get('/admin/visa-rules'),
+  getAccounting: (params) => api.get('/admin/accounting', { params }),
   updateVisaRule: (id, data) => api.put(`/admin/visa-rules/${id}`, data),
   verifyVisaRule: (id) => api.patch(`/admin/visa-rules/${id}/verify`),
   unpublishVisaRule: (id) => api.patch(`/admin/visa-rules/${id}/unpublish`),

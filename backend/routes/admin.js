@@ -352,6 +352,64 @@ router.put('/settings', protect, authorize('admin'), async (req, res) => {
 });
 
 /* ══════════════════════════════════════════════════════════
+   ACCOUNTING — booking/revenue report, separate from the agent-only
+   wallet ledger above (Transactions tab). Covers every application's
+   payment record (B2C and B2B), not just agent wallet movements.
+══════════════════════════════════════════════════════════ */
+
+// ── GET /api/admin/accounting ────────────────────────────
+router.get('/accounting', protect, authorize('admin'), async (req, res) => {
+  try {
+    const { from, to, page = 1, limit = 50 } = req.query;
+
+    const dateFilter = {};
+    if (from) dateFilter.$gte = new Date(from);
+    if (to) {
+      const end = new Date(to);
+      end.setHours(23, 59, 59, 999); // setHours mutates in place and returns a number — must not reassign it here
+      dateFilter.$lte = end;
+    }
+    const match = Object.keys(dateFilter).length ? { createdAt: dateFilter } : {};
+
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
+
+    const [bookings, total, summaryAgg, monthAgg] = await Promise.all([
+      Application.find(match)
+        .populate('visaId', 'country flag')
+        .populate('userId', 'name email')
+        .populate('agentId', 'name agentCode')
+        .select('applicationId applicantName planLabel pricePaid serviceFee amountPaid paymentMethod paymentStatus status createdAt visaId userId agentId')
+        .sort('-createdAt')
+        .skip((page - 1) * limit)
+        .limit(Number(limit)),
+      Application.countDocuments(match),
+      Application.aggregate([
+        { $match: { ...match, paymentStatus: 'paid' } },
+        { $group: { _id: null, totalRevenue: { $sum: '$amountPaid' }, totalServiceFees: { $sum: '$serviceFee' }, totalBookings: { $sum: 1 } } },
+      ]),
+      Application.aggregate([
+        { $match: { paymentStatus: 'paid', createdAt: { $gte: monthStart } } },
+        { $group: { _id: null, revenue: { $sum: '$amountPaid' }, bookings: { $sum: 1 } } },
+      ]),
+    ]);
+
+    res.json({
+      success: true,
+      summary: {
+        totalRevenue: summaryAgg[0]?.totalRevenue || 0,
+        totalServiceFees: summaryAgg[0]?.totalServiceFees || 0,
+        totalBookings: summaryAgg[0]?.totalBookings || 0,
+        thisMonthRevenue: monthAgg[0]?.revenue || 0,
+        thisMonthBookings: monthAgg[0]?.bookings || 0,
+      },
+      data: bookings,
+      total,
+      page: Number(page),
+    });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ══════════════════════════════════════════════════════════
    VISA RULES — official-source rule engine (see models/VisaRule.js)
 ══════════════════════════════════════════════════════════ */
 

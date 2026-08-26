@@ -17,7 +17,7 @@ import Modal from '../../../components/ui/Modal';
 import CountrySelect from '../../../components/common/CountrySelect';
 import toast from 'react-hot-toast';
 
-const TABS = ['Dashboard','Applications','Agents','Visas','Visa Rules','Users','Transactions','Settings'];
+const TABS = ['Dashboard','Applications','Agents','Visas','Visa Rules','Users','Transactions','Accounting','Settings'];
 const APP_STATUSES = ['pending','documents_received','in_review','processing','sent_to_immigration','approved','rejected','delivered'];
 const DOC_TYPE_LABELS = {
   frontPassport: 'Front Passport',
@@ -51,6 +51,9 @@ export default function AdminDashboard() {
   const [visaRulesLoading, setVisaRulesLoading] = useState(false);
   const [visaRuleFilter, setVisaRuleFilter] = useState('');
   const [busyRuleId, setBusyRuleId] = useState(null);
+  const [accounting, setAccounting] = useState(null);
+  const [accountingLoading, setAccountingLoading] = useState(false);
+  const [accountingRange, setAccountingRange] = useState({ from: '', to: '' });
   const [reviewingReq, setReviewingReq]   = useState(null);
   const [pwdForm, setPwdForm]         = useState({ currentPassword:'', newPassword:'', confirmPassword:'' });
   const [changingPwd, setChangingPwd] = useState(false);
@@ -110,6 +113,17 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => { if (tab === 'Visa Rules' && visaRules.length === 0) loadVisaRules(); }, [tab]);
+
+  const loadAccounting = useCallback(async (params = {}) => {
+    setAccountingLoading(true);
+    try {
+      const r = await adminAPI.getAccounting(params);
+      setAccounting(r.data);
+    } catch { toast.error('Could not load accounting report'); }
+    finally { setAccountingLoading(false); }
+  }, []);
+
+  useEffect(() => { if (tab === 'Accounting' && !accounting) loadAccounting(); }, [tab]);
 
   // Uploaded documents are no longer served from a public path — mint a
   // short-lived signed URL per document whenever the Edit Application
@@ -376,6 +390,17 @@ export default function AdminDashboard() {
       Description: t.description,
     })), `transactions_${Date.now()}.csv`);
   }, [exportCSV, txns]);
+
+  const exportAccountingCSV = useCallback(() => {
+    exportCSV((accounting?.data || []).map(b => ({
+      Date: new Date(b.createdAt).toLocaleDateString('en-IN'),
+      ApplicationID: b.applicationId, Applicant: b.applicantName,
+      Country: b.visaId?.country || '', Plan: b.planLabel,
+      PricePaid: b.pricePaid, ServiceFee: b.serviceFee, AmountPaid: b.amountPaid,
+      PaymentMethod: b.paymentMethod, PaymentStatus: b.paymentStatus, Status: b.status,
+      Agent: b.agentId?.name || 'B2C',
+    })), `accounting_${Date.now()}.csv`);
+  }, [exportCSV, accounting]);
 
   /* ── Save settings ─────────────────────────────────────── */
   const saveSettings = useCallback(async (formData) => {
@@ -1190,6 +1215,95 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════
+            ACCOUNTING — booking/revenue report (all applications,
+            B2C + B2B), separate from the agent-only wallet ledger
+            in the Transactions tab above.
+        ══════════════════════════════════════════════════════ */}
+        {tab === 'Accounting' && (
+          <div className="space-y-5">
+            <div className="flex items-end gap-3 flex-wrap">
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">From</label>
+                <input type="date" value={accountingRange.from}
+                  onChange={e => setAccountingRange({ ...accountingRange, from: e.target.value })}
+                  className="input-field text-sm" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600 mb-1 block">To</label>
+                <input type="date" value={accountingRange.to}
+                  onChange={e => setAccountingRange({ ...accountingRange, to: e.target.value })}
+                  className="input-field text-sm" />
+              </div>
+              <button onClick={() => loadAccounting(accountingRange)}
+                className="btn-primary px-4 py-2.5 text-sm">Apply</button>
+              {(accountingRange.from || accountingRange.to) && (
+                <button onClick={() => { setAccountingRange({ from: '', to: '' }); loadAccounting({}); }}
+                  className="px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-gray-700">Clear</button>
+              )}
+            </div>
+
+            {accountingLoading || !accounting ? (
+              <div className="p-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    ['Total Bookings', accounting.summary.totalBookings, 'bg-blue-50 text-blue-700', '📋'],
+                    ['Total Revenue', `₹${accounting.summary.totalRevenue.toLocaleString('en-IN')}`, 'bg-emerald-50 text-emerald-700', '💰'],
+                    ['Service Fees Collected', `₹${accounting.summary.totalServiceFees.toLocaleString('en-IN')}`, 'bg-orange-50 text-orange-700', '🧾'],
+                    ['This Month', `₹${accounting.summary.thisMonthRevenue.toLocaleString('en-IN')} (${accounting.summary.thisMonthBookings})`, 'bg-purple-50 text-purple-700', '📅'],
+                  ].map(([label, val, cls, icon]) => (
+                    <div key={label} className={`rounded-2xl p-5 ${cls}`}>
+                      <p className="text-2xl mb-1">{icon}</p>
+                      <p className="text-xl font-extrabold">{val}</p>
+                      <p className="text-xs font-medium mt-1">{label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                    <h2 className="font-bold text-primary">Booking History ({accounting.total})</h2>
+                    <button onClick={exportAccountingCSV}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-bold border border-gray-200 text-gray-600 hover:border-primary hover:text-primary transition-colors">
+                      <Download className="w-4 h-4" /> Export CSV
+                    </button>
+                  </div>
+                  {accounting.data.length === 0 ? <EmptyState icon="🧾" title="No bookings in this range" /> : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[900px]">
+                        <thead className="bg-gray-50">
+                          <tr className="text-xs text-gray-400 uppercase text-left">
+                            {['Date','Application','Applicant','Country','Plan','Amount Paid','Method','Payment','Status','Agent'].map(h =>
+                              <th key={h} className="px-4 py-3 font-semibold">{h}</th>)}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {accounting.data.map(b => (
+                            <tr key={b._id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{new Date(b.createdAt).toLocaleDateString('en-IN')}</td>
+                              <td className="px-4 py-3 font-mono text-xs">{b.applicationId}</td>
+                              <td className="px-4 py-3 text-xs font-semibold">{b.applicantName}</td>
+                              <td className="px-4 py-3 text-xs">{b.visaId?.flag} {b.visaId?.country}</td>
+                              <td className="px-4 py-3 text-xs text-gray-500">{b.planLabel}</td>
+                              <td className="px-4 py-3 font-bold text-primary whitespace-nowrap">₹{b.amountPaid?.toLocaleString('en-IN')}</td>
+                              <td className="px-4 py-3 text-xs text-gray-500 capitalize">{b.paymentMethod?.replace(/_/g,' ')}</td>
+                              <td className="px-4 py-3"><StatusBadge status={b.paymentStatus} /></td>
+                              <td className="px-4 py-3"><StatusBadge status={b.status} /></td>
+                              <td className="px-4 py-3 text-xs text-gray-500">{b.agentId?.name || 'B2C'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}
