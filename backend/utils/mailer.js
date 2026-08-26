@@ -74,6 +74,59 @@ const mailVisaDocumentReady = (app) => sendMail({
   `),
 });
 
+// Sent right after an application is submitted — a personal backup copy of
+// the Application ID + full submitted details (as a PDF), independent of
+// the database, since the hosting stack (MongoDB/Render/Vercel) currently
+// runs on free tiers that offer no guarantee against data loss.
+const mailApplicationSubmitted = (app, recipientEmail, pdfBuffer, isAgent) => sendMail({
+  to: recipientEmail,
+  subject: `Application submitted — ${app.applicationId} (keep for your records)`,
+  html: wrap('Application submitted successfully', `
+    <p>Hi ${isAgent ? (app.agentId?.name || 'there') : app.applicantName},</p>
+    <p>Your application has been submitted successfully.</p>
+    <table style="margin:16px 0;font-size:14px;">
+      <tr><td style="color:#888;padding-right:12px;">Application ID</td><td><b>${app.applicationId}</b></td></tr>
+      ${isAgent ? `<tr><td style="color:#888;padding-right:12px;">Agent Code</td><td><b>${app.agentId?.agentCode || ''}</b></td></tr>` : ''}
+      <tr><td style="color:#888;padding-right:12px;">Applicant</td><td>${app.applicantName}</td></tr>
+      <tr><td style="color:#888;padding-right:12px;">Destination</td><td>${app.visaId?.country || ''}</td></tr>
+      <tr><td style="color:#888;padding-right:12px;">Plan</td><td>${app.planLabel}</td></tr>
+    </table>
+    <p>A copy of your application (PDF) is attached — please keep this email safe as your personal backup record.</p>
+    <p>Track status anytime at <a href="https://visayatri.com/track">visayatri.com/track</a> using this Application ID.</p>
+  `),
+  attachments: pdfBuffer
+    ? [{ filename: `visayatri-${app.applicationId}-application-copy.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+    : undefined,
+});
+
+// Sent after documents are uploaded to an application — attaches the actual
+// uploaded files (not just metadata) as an off-platform backup copy, for
+// the same free-tier-storage-durability reason as mailApplicationSubmitted.
+// Total attachment size is capped — most SMTP providers reject mail much
+// past ~15 MB, so past that we still send the confirmation, just without
+// the binaries (the files themselves remain safe on disk either way).
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+const mailDocumentsBackup = (app, recipientEmail, docs, isAgent) => {
+  const totalSize = docs.reduce((sum, d) => sum + (d.size || 0), 0);
+  const attachments = totalSize <= MAX_ATTACHMENT_BYTES
+    ? docs.map(d => ({ filename: `${app.applicationId}-${d.docType}-${d.originalName}`, path: d.path, contentType: d.mimetype }))
+    : undefined;
+
+  return sendMail({
+    to: recipientEmail,
+    subject: `Documents uploaded — ${app.applicationId} (backup copy)`,
+    html: wrap('Document backup copy', `
+      <p>Hi ${isAgent ? (app.agentId?.name || 'there') : app.applicantName},</p>
+      <p>${docs.length} document(s) were just uploaded to application <b>${app.applicationId}</b>:</p>
+      <ul>${docs.map(d => `<li>${d.docType} — ${d.originalName}</li>`).join('')}</ul>
+      ${attachments
+        ? '<p>Copies are attached to this email as an off-platform backup — please keep this email safe.</p>'
+        : '<p>These files were too large to attach directly — they remain safely stored on your Visayatri account.</p>'}
+    `),
+    attachments,
+  });
+};
+
 const mailDocumentsRequested = (app, items, note) => sendMail({
   to: app.applicantEmail,
   subject: `Action needed: additional documents for ${app.applicationId}`,
@@ -86,4 +139,7 @@ const mailDocumentsRequested = (app, items, note) => sendMail({
   `),
 });
 
-module.exports = { sendMail, mailPasswordReset, mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested };
+module.exports = {
+  sendMail, mailPasswordReset, mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested,
+  mailApplicationSubmitted, mailDocumentsBackup,
+};

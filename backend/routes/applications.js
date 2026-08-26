@@ -11,7 +11,7 @@ const { handleUpload }       = require('../middleware/upload');
 const { checkFaceCoverage }  = require('../middleware/faceCheck');
 const { debitWallet, creditWallet } = require('../utils/wallet');
 const wa = require('../utils/whatsapp');
-const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested } = require('../utils/mailer');
+const { mailVisaApproved, mailVisaDocumentReady, mailDocumentsRequested, mailApplicationSubmitted, mailDocumentsBackup } = require('../utils/mailer');
 const { buildInvoicePDF } = require('../utils/invoicePdf');
 const { signFileToken } = require('../utils/fileSignature');
 
@@ -160,7 +160,20 @@ router.post('/', optionalAuth, async (req, res) => {
       statusHistory:  [{ status: 'pending', note: 'Application submitted', updatedBy: user._id }],
     });
 
-    await app.populate('visaId', 'country flag slug');
+    await app.populate('visaId', 'country flag slug visaType processingTime');
+    if (isAgent) await app.populate('agentId', 'name agentCode email');
+
+    // Backup copy by email — best-effort, never blocks the response. The
+    // hosting stack (MongoDB/Render/Vercel) runs on free tiers with no
+    // durability guarantee, so this is the applicant/agent's own off-platform
+    // record of the Application ID + submitted details.
+    try {
+      const pdfBuffer = await buildInvoicePDF(app);
+      const recipientEmail = isAgent ? user.email : applicantEmail;
+      await mailApplicationSubmitted(app, recipientEmail, pdfBuffer, isAgent);
+    } catch (mailErr) {
+      console.error('[app-create] confirmation email failed:', mailErr.message);
+    }
 
     /* Build contextual WhatsApp link */
     let whatsappLink;
@@ -407,6 +420,17 @@ router.post('/:id/documents', protect, handleUpload('documents', 10), async (req
       });
     }
     await app.save();
+
+    // Backup copy of the uploaded files by email — best-effort, same
+    // free-tier-durability reasoning as the submission confirmation email.
+    try {
+      const isAgent = !!app.agentId;
+      if (isAgent) await app.populate('agentId', 'name agentCode email');
+      const recipientEmail = isAgent ? app.agentId.email : app.applicantEmail;
+      await mailDocumentsBackup(app, recipientEmail, newDocs, isAgent);
+    } catch (mailErr) {
+      console.error('[app-documents] backup email failed:', mailErr.message);
+    }
 
     const message = rejected.length
       ? `${newDocs.length} file(s) uploaded — ${rejected.length} rejected: ${rejected.map(r => r.message).join(' ')}`
