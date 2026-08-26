@@ -5,6 +5,7 @@ const Transaction   = require('../models/Transaction');
 const WalletRequest = require('../models/WalletRequest');
 const { protect, authorize, agentApproved } = require('../middleware/auth');
 const { creditWallet } = require('../utils/wallet');
+const { signFileToken } = require('../utils/fileSignature');
 const wa = require('../utils/whatsapp');
 
 /* ── GET /api/agents/dashboard ──────────────────────────── */
@@ -256,7 +257,34 @@ router.get('/list', protect, authorize('admin'), async (req, res) => {
       User.find(filter).select('-password').sort('-createdAt').skip((page-1)*limit).limit(Number(limit)),
       User.countDocuments(filter),
     ]);
-    res.json({ success: true, data: agents, total });
+    // Raw file paths never leave the server — collapse kycDocuments to
+    // submitted/not-submitted booleans; admin fetches an actual signed
+    // URL per-document on demand via the endpoint below.
+    const shaped = agents.map(a => {
+      const obj = a.toObject();
+      if (obj.kycDocuments) {
+        obj.kycDocuments = Object.fromEntries(Object.entries(obj.kycDocuments).map(([k, v]) => [k, !!v]));
+      }
+      return obj;
+    });
+    res.json({ success: true, data: shaped, total });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+});
+
+/* ── GET /api/agents/:id/kyc-documents/:docType/signed-url — admin ───
+   Mints a short-lived signed URL for one of an agent's KYC documents
+   (panCard/aadharCard/gstCertificate/addressProof), so admin can review
+   them before approving without exposing raw file paths in /list. */
+router.get('/:id/kyc-documents/:docType/signed-url', protect, authorize('admin'), async (req, res) => {
+  try {
+    const agent = await User.findOne({ _id: req.params.id, role: 'agent' });
+    if (!agent) return res.status(404).json({ success: false, message: 'Agent not found.' });
+
+    const filePath = agent.kycDocuments?.[req.params.docType];
+    if (!filePath) return res.status(404).json({ success: false, message: 'Document not submitted.' });
+
+    const token = signFileToken(filePath);
+    res.json({ success: true, url: `/api/files/serve/${token}` });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 });
 
@@ -277,18 +305,22 @@ router.put('/:id/approve', protect, authorize('admin'), async (req, res) => {
 /* ── PUT /api/agents/:id  — admin edit agent ────────────── */
 router.put('/:id', protect, authorize('admin'), async (req, res) => {
   try {
-    const { commissionRate, isApproved, isActive, companyName, city, gstNumber } = req.body;
+    const { commissionRate, isApproved, isActive, companyName, companyType, officeAddress, city, gstNumber, panNumber, aadharNumber } = req.body;
     const updates = {};
     if (commissionRate !== undefined) {
       if (commissionRate < 0 || commissionRate > 100)
         return res.status(400).json({ success: false, message: 'Commission must be 0–100.' });
       updates.commissionRate = commissionRate;
     }
-    if (isApproved  !== undefined) updates.isApproved  = isApproved;
-    if (isActive    !== undefined) updates.isActive     = isActive;
-    if (companyName !== undefined) updates.companyName  = companyName;
-    if (city        !== undefined) updates.city         = city;
-    if (gstNumber   !== undefined) updates.gstNumber    = gstNumber;
+    if (isApproved    !== undefined) updates.isApproved    = isApproved;
+    if (isActive      !== undefined) updates.isActive      = isActive;
+    if (companyName   !== undefined) updates.companyName   = companyName;
+    if (companyType   !== undefined) updates.companyType   = companyType;
+    if (officeAddress !== undefined) updates.officeAddress = officeAddress;
+    if (city          !== undefined) updates.city          = city;
+    if (gstNumber     !== undefined) updates.gstNumber     = gstNumber;
+    if (panNumber     !== undefined) updates.panNumber     = panNumber;
+    if (aadharNumber  !== undefined) updates.aadharNumber  = aadharNumber;
 
     const agent = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
     if (!agent) return res.status(404).json({ success: false, message: 'Agent not found.' });

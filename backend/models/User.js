@@ -18,8 +18,21 @@ const userSchema = new mongoose.Schema({
   commissionRate:  { type: Number, default: 10 },   // % commission on approved apps
   totalCommission: { type: Number, default: 0 },    // lifetime commission earned
   companyName:     { type: String, default: '' },
+  companyType:     { type: String, enum: ['', 'Proprietorship', 'Partnership', 'Private Limited', 'LLP', 'Individual', 'Other'], default: '' },
+  officeAddress:   { type: String, default: '' },
   gstNumber:       { type: String, default: '' },
+  panNumber:       { type: String, default: '' },
+  aadharNumber:    { type: String, default: '' },
   city:            { type: String, default: '' },
+
+  // ── Agent KYC documents — absolute disk paths, served only via
+  // short-lived signed URLs (see routes/files.js), same as Application docs.
+  kycDocuments: {
+    panCard:        { type: String, default: '' },
+    aadharCard:     { type: String, default: '' },
+    gstCertificate: { type: String, default: '' },
+    addressProof:   { type: String, default: '' },
+  },
 
   // ── Password reset ──────────────────────────────────────
   // Stores a SHA-256 hash of the token, never the raw value that goes out

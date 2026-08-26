@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const User   = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { mailPasswordReset } = require('../utils/mailer');
+const { handleAgentKycUpload } = require('../middleware/agentKycUpload');
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
@@ -27,18 +28,24 @@ const sendAuth = (res, status, user, token) =>
   });
 
 // ── POST /api/auth/register ──────────────────────────────
-router.post('/register', [
+router.post('/register', handleAgentKycUpload, [
   body('name').notEmpty().withMessage('Name is required'),
   body('email').isEmail().withMessage('Valid email required').normalizeEmail(),
   body('password').isLength({ min: 6 }).withMessage('Password min 6 chars'),
   body('role').optional().isIn(['user','agent']).withMessage('Role must be user or agent'),
+  body('companyName').if(body('role').equals('agent')).notEmpty().withMessage('Company name is required for agents'),
+  body('panNumber').if(body('role').equals('agent')).notEmpty().withMessage('PAN number is required for agents'),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty())
     return res.status(400).json({ success: false, message: errors.array()[0].msg, errors: errors.array() });
 
   try {
-    const { name, email, password, phone, role, companyName, city, referralCode } = req.body;
+    const {
+      name, email, password, phone, role, referralCode,
+      companyName, companyType, officeAddress, city,
+      gstNumber, panNumber, aadharNumber,
+    } = req.body;
 
     if (await User.findOne({ email }))
       return res.status(409).json({ success: false, message: 'Email already registered. Please login.' });
@@ -46,10 +53,24 @@ router.post('/register', [
     const userData = { name, email, password, phone: phone || '', role: role || 'user' };
 
     if (role === 'agent') {
-      userData.agentCode   = 'AGT' + Date.now().toString().slice(-6);
-      userData.isApproved  = false;
-      userData.companyName = companyName || '';
-      userData.city        = city || '';
+      userData.agentCode     = 'AGT' + Date.now().toString().slice(-6);
+      userData.isApproved    = false;
+      userData.companyName   = companyName || '';
+      userData.companyType   = companyType || '';
+      userData.officeAddress = officeAddress || '';
+      userData.city          = city || '';
+      userData.gstNumber     = gstNumber || '';
+      userData.panNumber     = panNumber || '';
+      userData.aadharNumber  = aadharNumber || '';
+
+      if (req.files) {
+        userData.kycDocuments = {
+          panCard:        req.files.panCard?.[0]?.path || '',
+          aadharCard:     req.files.aadharCard?.[0]?.path || '',
+          gstCertificate: req.files.gstCertificate?.[0]?.path || '',
+          addressProof:   req.files.addressProof?.[0]?.path || '',
+        };
+      }
     }
 
     if (referralCode) {

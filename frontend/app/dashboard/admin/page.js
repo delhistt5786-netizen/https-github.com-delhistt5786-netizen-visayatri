@@ -7,7 +7,7 @@ import {
   Loader2, BarChart2, Search, Filter, ExternalLink, ShieldCheck, File,
   UserPlus, Download, Upload, PlaneTakeoff, FilePlus2, Trash2,
 } from 'lucide-react';
-import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, authAPI, uploadsOrigin } from '../../../lib/api';
+import { adminAPI, agentAPI, appAPI, visaAPI, countryAPI, authAPI, uploadsOrigin, openAgentKycDocument } from '../../../lib/api';
 import { getUser } from '../../../lib/auth';
 import StatusBadge from '../../../components/ui/StatusBadge';
 import Loading from '../../../components/ui/Loading';
@@ -1518,6 +1518,43 @@ export default function AdminDashboard() {
               <div><p className="text-gray-400 text-xs mb-1">Agent Code</p><p className="font-mono font-bold text-primary">{editAgent.agentCode}</p></div>
               <div><p className="text-gray-400 text-xs mb-1">Wallet Balance</p><p className="font-bold text-emerald-600">₹{editAgent.walletBalance?.toLocaleString('en-IN') || 0}</p></div>
             </div>
+
+            <div className="border border-gray-200 rounded-xl p-4 space-y-2">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Business Details (KYC)</p>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                <div><p className="text-gray-400 text-xs">Company</p><p className="font-medium">{editAgent.companyName || '—'}</p></div>
+                <div><p className="text-gray-400 text-xs">Type</p><p className="font-medium">{editAgent.companyType || '—'}</p></div>
+                <div><p className="text-gray-400 text-xs">City</p><p className="font-medium">{editAgent.city || '—'}</p></div>
+                <div><p className="text-gray-400 text-xs">GST Number</p><p className="font-medium">{editAgent.gstNumber || '—'}</p></div>
+                <div><p className="text-gray-400 text-xs">PAN Number</p><p className="font-medium">{editAgent.panNumber || '—'}</p></div>
+                <div><p className="text-gray-400 text-xs">Aadhar Number</p><p className="font-medium">{editAgent.aadharNumber || '—'}</p></div>
+                <div className="col-span-2"><p className="text-gray-400 text-xs">Office Address</p><p className="font-medium">{editAgent.officeAddress || '—'}</p></div>
+              </div>
+
+              {editAgent.kycDocuments && (
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-gray-400 text-xs mb-2">Uploaded Documents</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { field: 'panCard', label: 'PAN Card' },
+                      { field: 'aadharCard', label: 'Aadhar Card' },
+                      { field: 'addressProof', label: 'Address Proof' },
+                      { field: 'gstCertificate', label: 'GST Certificate' },
+                    ].map(({field, label}) => editAgent.kycDocuments[field] ? (
+                      <button key={field} type="button" onClick={() => openAgentKycDocument(editAgent._id, field)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold transition-colors">
+                        <FileText className="w-3.5 h-3.5" /> {label}
+                      </button>
+                    ) : (
+                      <span key={field} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 text-gray-400 text-xs">
+                        {label} not submitted
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="text-xs font-semibold text-gray-600 mb-1 block">Commission Rate (%)</label>
               <input type="number" min="0" max="100" value={agentForm.commissionRate}

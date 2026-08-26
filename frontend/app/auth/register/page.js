@@ -2,24 +2,53 @@
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CheckCircle, Shield, Zap, ArrowRight, Users, TrendingUp } from 'lucide-react';
+import { CheckCircle, Shield, Zap, ArrowRight, Users, TrendingUp, Upload, X as XIcon } from 'lucide-react';
 import { authAPI } from '../../../lib/api';
 import { setAuth } from '../../../lib/auth';
 import toast from 'react-hot-toast';
+
+const AGENT_KYC_FIELDS = [
+  { field: 'companyName',   label: 'Company / Agency Name', type: 'text', placeholder: 'e.g. Sharma Travels', required: true },
+  { field: 'officeAddress', label: 'Office Address', type: 'textarea', placeholder: 'Full office address', required: true },
+  { field: 'city',          label: 'City', type: 'text', placeholder: 'e.g. Delhi', required: true },
+  { field: 'panNumber',     label: 'PAN Number', type: 'text', placeholder: 'ABCDE1234F', required: true },
+  { field: 'aadharNumber',  label: 'Aadhar Number', type: 'text', placeholder: '1234 5678 9012', required: true },
+  { field: 'gstNumber',     label: 'GST Number (if registered)', type: 'text', placeholder: 'Optional', required: false },
+];
+
+const COMPANY_TYPES = ['Proprietorship', 'Partnership', 'Private Limited', 'LLP', 'Individual', 'Other'];
+
+const KYC_DOCS = [
+  { field: 'panCard',        label: 'PAN Card' },
+  { field: 'aadharCard',     label: 'Aadhar Card' },
+  { field: 'addressProof',   label: 'Address Proof' },
+  { field: 'gstCertificate', label: 'GST Certificate (if applicable)' },
+];
 
 function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
   const referralCode = params.get('ref') || '';
-  const [form, setForm] = useState({ name:'', email:'', phone:'', password:'', role: params.get('role') || 'user', referralCode });
+  const [form, setForm] = useState({
+    name:'', email:'', phone:'', password:'', role: params.get('role') || 'user', referralCode,
+    companyName:'', companyType:'', officeAddress:'', city:'', panNumber:'', aadharNumber:'', gstNumber:'',
+  });
+  const [docs, setDocs] = useState({}); // { panCard: File, aadharCard: File, ... }
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (form.role === 'agent' && !form.companyType) { toast.error('Please select a company type'); return; }
     setLoading(true);
     try {
-      const { data } = await authAPI.register(form);
+      let payload = form;
+      if (form.role === 'agent') {
+        payload = new FormData();
+        Object.entries(form).forEach(([k, v]) => payload.append(k, v ?? ''));
+        Object.entries(docs).forEach(([k, file]) => { if (file) payload.append(k, file); });
+      }
+      const { data } = await authAPI.register(payload);
       setAuth(data.token, data.user);
       toast.success('Account created successfully!');
       if (data.user.role === 'agent') {
@@ -125,9 +154,64 @@ function RegisterForm() {
                 )}
 
                 {form.role === 'agent' && (
-                  <div className="p-3 bg-[#FF7A00]/20 rounded-xl border border-[#FF7A00]/30 text-xs text-[#FFB366] space-y-1">
-                    <p className="font-bold">✓ Agent accounts pending approval</p>
-                    <p>Your account will be reviewed by our team within 24 hours.</p>
+                  <div className="space-y-4 pt-2 border-t border-white/20">
+                    <p className="text-sm font-bold text-white uppercase tracking-wide">Business Details (KYC)</p>
+
+                    <div>
+                      <label className="text-sm font-bold text-white uppercase tracking-wide block mb-2">Company Type</label>
+                      <select required value={form.companyType} onChange={e => setForm({...form, companyType: e.target.value})}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-[#FF7A00] transition-all">
+                        <option value="" className="text-gray-800">Select company type</option>
+                        {COMPANY_TYPES.map(t => <option key={t} value={t} className="text-gray-800">{t}</option>)}
+                      </select>
+                    </div>
+
+                    {AGENT_KYC_FIELDS.map(({field, label, type, placeholder, required}) => (
+                      <div key={field}>
+                        <label className="text-sm font-bold text-white uppercase tracking-wide block mb-2">{label}</label>
+                        {type === 'textarea' ? (
+                          <textarea required={required} value={form[field]} onChange={e => setForm({...form,[field]:e.target.value})}
+                            placeholder={placeholder} rows={2}
+                            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#FF7A00] transition-all resize-none" />
+                        ) : (
+                          <input type={type} required={required} value={form[field]} onChange={e => setForm({...form,[field]:e.target.value})}
+                            placeholder={placeholder}
+                            className="w-full px-4 py-3 rounded-xl bg-white/10 border border-white/20 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[#FF7A00] transition-all" />
+                        )}
+                      </div>
+                    ))}
+
+                    <div>
+                      <p className="text-sm font-bold text-white uppercase tracking-wide mb-2">Upload Documents</p>
+                      <p className="text-xs text-white/60 mb-3">JPEG, PNG or PDF, max 5 MB each. You can also add these later from your dashboard.</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {KYC_DOCS.map(({field, label}) => (
+                          <label key={field}
+                            className="flex flex-col items-center justify-center gap-1 p-3 rounded-xl bg-white/10 border border-dashed border-white/30 text-white/80 text-xs text-center cursor-pointer hover:bg-white/20 transition-all min-h-[72px]">
+                            {docs[field] ? (
+                              <>
+                                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                                <span className="truncate w-full px-1">{docs[field].name}</span>
+                                <button type="button" onClick={(e) => { e.preventDefault(); setDocs({...docs, [field]: null}); }}
+                                  className="text-red-300 hover:text-red-400 flex items-center gap-1"><XIcon className="w-3 h-3" /> Remove</button>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                <span>{label}</span>
+                              </>
+                            )}
+                            <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
+                              onChange={e => setDocs({...docs, [field]: e.target.files[0]})} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="p-3 bg-[#FF7A00]/20 rounded-xl border border-[#FF7A00]/30 text-xs text-[#FFB366] space-y-1">
+                      <p className="font-bold">✓ Agent accounts pending approval</p>
+                      <p>Your account and documents will be reviewed by our team within 24 hours.</p>
+                    </div>
                   </div>
                 )}
 

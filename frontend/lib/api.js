@@ -167,6 +167,14 @@ export const agentAPI = {
   getLeaderboard: () => api.get('/agents/leaderboard'),
 };
 
+// Opens an agent's KYC document (PAN/Aadhar/GST/address proof) in a new tab
+// via a freshly-minted short-lived signed URL — same pattern as application
+// documents, so raw file paths never reach the browser.
+export const openAgentKycDocument = async (agentId, docType) => {
+  const r = await api.get(`/agents/${agentId}/kyc-documents/${docType}/signed-url`);
+  window.open(`${uploadsOrigin}${r.data.url}`, '_blank', 'noopener,noreferrer');
+};
+
 // ── Admin ─────────────────────────────────────────────────
 export const adminAPI = {
   getDashboard: () => withMock(() => api.get('/admin/dashboard'), () => mockData.MOCK_ADMIN_DATA),
