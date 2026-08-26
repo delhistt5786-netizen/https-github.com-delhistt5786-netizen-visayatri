@@ -16,7 +16,12 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
   });
 }
 
-async function sendMail({ to, subject, html, attachments }) {
+// Business backup inbox — every application-submission / document-upload
+// backup email is BCC'd here too, since the applicant's/agent's own inbox
+// isn't a record Visayatri itself controls.
+const ADMIN_BACKUP_EMAIL = process.env.ADMIN_BACKUP_EMAIL || 'visa.stt5786@gmail.com';
+
+async function sendMail({ to, bcc, subject, html, attachments }) {
   if (!transporter) {
     console.log(`[mailer] SMTP not configured — skipped email to ${to}: "${subject}"`);
     return { sent: false, reason: 'SMTP not configured' };
@@ -24,7 +29,7 @@ async function sendMail({ to, subject, html, attachments }) {
   try {
     await transporter.sendMail({
       from: `"${process.env.BRAND_NAME || 'Visayatri'}" <${process.env.SMTP_USER}>`,
-      to, subject, html, attachments,
+      to, bcc, subject, html, attachments,
     });
     return { sent: true };
   } catch (err) {
@@ -80,6 +85,7 @@ const mailVisaDocumentReady = (app) => sendMail({
 // runs on free tiers that offer no guarantee against data loss.
 const mailApplicationSubmitted = (app, recipientEmail, pdfBuffer, isAgent) => sendMail({
   to: recipientEmail,
+  bcc: recipientEmail.toLowerCase() === ADMIN_BACKUP_EMAIL.toLowerCase() ? undefined : ADMIN_BACKUP_EMAIL,
   subject: `Application submitted — ${app.applicationId} (keep for your records)`,
   html: wrap('Application submitted successfully', `
     <p>Hi ${isAgent ? (app.agentId?.name || 'there') : app.applicantName},</p>
@@ -114,6 +120,7 @@ const mailDocumentsBackup = (app, recipientEmail, docs, isAgent) => {
 
   return sendMail({
     to: recipientEmail,
+    bcc: recipientEmail.toLowerCase() === ADMIN_BACKUP_EMAIL.toLowerCase() ? undefined : ADMIN_BACKUP_EMAIL,
     subject: `Documents uploaded — ${app.applicationId} (backup copy)`,
     html: wrap('Document backup copy', `
       <p>Hi ${isAgent ? (app.agentId?.name || 'there') : app.applicantName},</p>
