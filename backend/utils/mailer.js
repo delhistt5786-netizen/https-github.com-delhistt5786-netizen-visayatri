@@ -1,27 +1,48 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns');
+const dns = require('dns').promises;
 
-// Render's network resolves smtp.gmail.com to an IPv6 address it then can't
-// actually route to (ENETUNREACH) — force Node to prefer IPv4 results so
-// outbound SMTP connections use a route that works. Safe globally; nothing
-// else in this app depends on IPv6 being preferred.
-if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
+const SMTP_CONFIGURED = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 
 /**
- * Best-effort email sender. If SMTP isn't configured (no SMTP_HOST/USER/PASS
- * in .env), every send is a no-op that logs instead of throwing — nothing in
- * the application flow (approvals, document requests) should ever fail or
- * block just because email isn't set up yet.
+ * nodemailer resolves both A and AAAA records for the SMTP host and then
+ * picks ONE AT RANDOM between them (see nodemailer/lib/shared/index.js
+ * formatDNSValue) — it does not prefer IPv4 despite listing it first.
+ * Render's network can't actually route IPv6 to Gmail (ENETUNREACH), so
+ * every other send was silently failing at random. dns.setDefaultResultOrder
+ * doesn't help here because nodemailer uses its own resolver, not
+ * net.connect's built-in dns.lookup. The reliable fix: resolve the IPv4
+ * address ourselves and connect to that literal IP — nodemailer skips its
+ * own DNS resolution entirely when `host` is already an IP (net.isIP check),
+ * so there's nothing left to randomly pick wrong. `tls.servername` keeps
+ * certificate hostname validation working against the real hostname.
  */
-let transporter = null;
-if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    family: 4, // belt-and-suspenders alongside dns.setDefaultResultOrder above
-  });
+let cachedTransporter = null;
+let cachedAt = 0;
+const TRANSPORTER_TTL_MS = 5 * 60 * 1000; // re-resolve periodically in case Gmail's IP pool shifts
+
+async function getTransporter() {
+  if (!SMTP_CONFIGURED) return null;
+  if (cachedTransporter && Date.now() - cachedAt < TRANSPORTER_TTL_MS) return cachedTransporter;
+
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const secure = Number(process.env.SMTP_PORT) === 465;
+  const auth = { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };
+
+  let host = process.env.SMTP_HOST;
+  let tls;
+  try {
+    const addresses = await dns.resolve4(process.env.SMTP_HOST);
+    if (addresses.length) {
+      host = addresses[0];
+      tls = { servername: process.env.SMTP_HOST };
+    }
+  } catch (err) {
+    console.error('[mailer] IPv4 resolution failed, falling back to hostname (may hit ENETUNREACH):', err.message);
+  }
+
+  cachedTransporter = nodemailer.createTransport({ host, port, secure, auth, tls });
+  cachedAt = Date.now();
+  return cachedTransporter;
 }
 
 // Business backup inbox — every application-submission / document-upload
@@ -30,6 +51,7 @@ if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
 const ADMIN_BACKUP_EMAIL = process.env.ADMIN_BACKUP_EMAIL || 'visa.stt5786@gmail.com';
 
 async function sendMail({ to, bcc, subject, html, attachments }) {
+  const transporter = await getTransporter();
   if (!transporter) {
     console.log(`[mailer] SMTP not configured — skipped email to ${to}: "${subject}"`);
     return { sent: false, reason: 'SMTP not configured' };
