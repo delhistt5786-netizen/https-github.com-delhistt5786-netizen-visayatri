@@ -1,4 +1,4 @@
-const WA = process.env.NEXT_PUBLIC_WHATSAPP || '919129594282';
+const WA = process.env.NEXT_PUBLIC_WHATSAPP || '919717743876';
 const waLink = (msg) => `https://wa.me/${WA}?text=${encodeURIComponent(msg)}`;
 
 const fmt = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' }) : 'Not specified';

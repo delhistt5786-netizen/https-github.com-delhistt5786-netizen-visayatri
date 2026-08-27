@@ -144,7 +144,7 @@ export default function AboutPage() {
             <Link href="/visa" className="px-8 py-4 bg-gradient-to-r from-[#FF7A00] to-orange-500 text-white rounded-lg font-bold hover:from-orange-600 hover:to-orange-600 transition inline-block">
               Browse Visas
             </Link>
-            <a href="https://wa.me/919129594282?text=Hi%20Shoib%20Tour%20and%20Travels" target="_blank" rel="noopener noreferrer" className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold hover:from-green-600 hover:to-emerald-700 transition inline-block flex items-center justify-center gap-2">
+            <a href="https://wa.me/919717743876?text=Hi%20Shoib%20Tour%20and%20Travels" target="_blank" rel="noopener noreferrer" className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-bold hover:from-green-600 hover:to-emerald-700 transition inline-block flex items-center justify-center gap-2">
               <MessageCircle className="w-5 h-5" />
               Contact on WhatsApp
             </a>
