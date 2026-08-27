@@ -15,9 +15,9 @@ export default function Footer() {
             </div>
             <p className="text-blue-200 text-sm leading-relaxed">Fast & Trusted Visa Services by Shoib Tour and Travels. Apply online for 39+ countries with expert guidance.</p>
             <div className="mt-4 space-y-2">
-              <a href="https://wa.me/919717743876" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white transition-colors">
+              <a href="https://wa.me/919129594282" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white transition-colors">
                 <Phone className="w-4 h-4 flex-shrink-0" />
-                <span className="whitespace-nowrap">+91 97177 43876</span>
+                <span className="whitespace-nowrap">+91 91295 94282</span>
               </a>
               <a href="mailto:visa.stt5786@gmail.com" className="flex items-center gap-2 text-sm text-blue-200 hover:text-white transition-colors">
                 <Mail className="w-4 h-4 flex-shrink-0" /> visa.stt5786@gmail.com
@@ -50,7 +50,7 @@ export default function Footer() {
               <li><Link href="/about" className="hover:text-white">About Us</Link></li>
               <li><Link href="/contact" className="hover:text-white">Contact Us</Link></li>
               <li><Link href="/privacy" className="hover:text-white">Privacy Policy</Link></li>
-              <li><a href="https://wa.me/919717743876" className="hover:text-white">Support</a></li>
+              <li><a href="https://wa.me/919129594282" className="hover:text-white">Support</a></li>
             </ul>
           </div>
           <div>
@@ -58,7 +58,7 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-blue-200">
               <li><Link href="/auth/register?role=agent" className="hover:text-white">Agent Registration</Link></li>
               <li><Link href="/dashboard/agent" className="hover:text-white">Agent Login</Link></li>
-              <li><a href="https://wa.me/919717743876" className="hover:text-white">WhatsApp Us</a></li>
+              <li><a href="https://wa.me/919129594282" className="hover:text-white">WhatsApp Us</a></li>
             </ul>
             <div className="mt-6 p-3 bg-secondary/30 rounded-xl text-sm text-blue-100">
               <p className="font-semibold">📋 Documents Needed</p>

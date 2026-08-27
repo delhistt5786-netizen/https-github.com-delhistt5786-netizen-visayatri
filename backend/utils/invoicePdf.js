@@ -23,7 +23,7 @@ function buildInvoicePDF(app) {
     doc.rect(0, 0, W, 100).fill('#0B3C5D');
     doc.fillColor('white').font('Helvetica-Bold').fontSize(30).text('VISAYATRI', 50, 22);
     doc.font('Helvetica').fontSize(12).fillColor('#90CAF9').text('Fast & Trusted Visa Services', 50, 56);
-    doc.fillColor('#FF7A00').fontSize(10).text('+91 9717743876  •  visa.stt5786@gmail.com', 50, 75);
+    doc.fillColor('#FF7A00').fontSize(10).text('+91 9129594282  •  visa.stt5786@gmail.com', 50, 75);
 
     doc.fillColor('white').rect(W-160, 20, 120, 60).fill('rgba(255,255,255,0.08)');
     doc.fillColor('white').font('Helvetica-Bold').fontSize(11).text('INVOICE', W-150, 28, { width: 100, align: 'center' });
@@ -86,7 +86,7 @@ function buildInvoicePDF(app) {
     doc.moveDown(3);
     doc.fillColor('#999').font('Helvetica').fontSize(8)
        .text('This is a computer-generated invoice. No signature required.', { align: 'center' })
-       .text('For queries, WhatsApp: +91 9717743876  |  visa.stt5786@gmail.com', { align: 'center' })
+       .text('For queries, WhatsApp: +91 9129594282  |  visa.stt5786@gmail.com', { align: 'center' })
        .text('Visayatri — Fast & Trusted Visa Services', { align: 'center' });
 
     doc.end();

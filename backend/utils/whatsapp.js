@@ -2,7 +2,7 @@
  * WhatsApp deep-link generator — Production version
  * All messages are rich, contextual, and conversion-optimized
  */
-const WA_NUMBER = process.env.WHATSAPP_NUMBER || '919717743876';
+const WA_NUMBER = process.env.WHATSAPP_NUMBER || '919129594282';
 const waLink    = (msg) => `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent(msg)}`;
 
 // Link that opens a chat TO a given applicant's number (not the business

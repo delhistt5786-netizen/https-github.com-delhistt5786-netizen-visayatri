@@ -63,7 +63,7 @@ export default function ContactPage() {
                 <Phone className="w-6 h-6 text-[#FF7A00]" />
                 <h3 className="text-lg font-bold text-white">Call Us</h3>
               </div>
-              <p className="text-blue-100 font-semibold">+91 97177 43876</p>
+              <p className="text-blue-100 font-semibold">+91 91295 94282</p>
               <p className="text-blue-200 text-sm mt-1">Mon-Sun, 9 AM - 10 PM</p>
             </div>
 
@@ -83,10 +83,10 @@ export default function ContactPage() {
                 <MessageCircle className="w-6 h-6 text-[#FF7A00]" />
                 <h3 className="text-lg font-bold text-white">WhatsApp</h3>
               </div>
-              <p className="text-blue-100 font-semibold">+91 97177 43876</p>
+              <p className="text-blue-100 font-semibold">+91 91295 94282</p>
               <p className="text-blue-200 text-sm mt-1">Chat anytime, 24/7</p>
               <a 
-                href="https://wa.me/919717743876?text=Hi%20Shoib%20Tour%20and%20Travels" 
+                href="https://wa.me/919129594282?text=Hi%20Shoib%20Tour%20and%20Travels" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="mt-3 inline-block px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-700 transition text-sm"

@@ -175,7 +175,7 @@ These services have their own privacy policies. We only share data necessary for
             <p>If you have privacy questions or wish to exercise your rights:</p>
             <div className="bg-gradient-to-br from-orange-50 to-blue-50 rounded-lg p-4 space-y-2 mt-4">
               <p><strong>Email:</strong> <a href="mailto:visa.stt5786@gmail.com" className="text-[#FF7A00] hover:underline">visa.stt5786@gmail.com</a></p>
-              <p><strong>WhatsApp:</strong> <a href="https://wa.me/919717743876" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">+91 97177 43876</a></p>
+              <p><strong>WhatsApp:</strong> <a href="https://wa.me/919129594282" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">+91 91295 94282</a></p>
               <p><strong>Company:</strong> Shoib Tour and Travels</p>
             </div>
           </div>
