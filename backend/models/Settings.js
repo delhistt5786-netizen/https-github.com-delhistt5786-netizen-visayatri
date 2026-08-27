@@ -13,6 +13,12 @@ const settingsSchema = new mongoose.Schema({
   serviceFeeEnabled: {
     type: Boolean,
     default: true
+  },
+  // When off, status-update notifications only go by email — the WhatsApp
+  // deep link is not generated, so the admin UI has nothing to pop open.
+  whatsappNotificationsEnabled: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true

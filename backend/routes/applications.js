@@ -490,9 +490,12 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
 
     await app.save();
 
-    // Notify the applicant by email (best-effort) + hand back a WhatsApp
-    // deep link the admin can also send — same pattern used for
-    // request-documents / visa-document dispatch below.
+    // Notify the applicant by email (best-effort, always attempted) + hand
+    // back a WhatsApp deep link the admin can also send — WhatsApp isn't
+    // fully set up yet, so it's admin-toggleable (Settings) rather than
+    // forced on every status change; email keeps working either way.
+    const settings = await Settings.findOne();
+    const whatsappEnabled = settings?.whatsappNotificationsEnabled !== false;
     let emailResult = { sent: false };
     let whatsappLink = null;
     await app.populate('visaId', 'country');
@@ -506,13 +509,18 @@ router.put('/:id/status', protect, authorize('admin', 'agent'), async (req, res)
         console.error('[applications] invoice PDF generation failed, sending email without attachment:', pdfErr.message);
       }
       emailResult = await mailVisaApproved(app, invoiceBuffer);
-      whatsappLink = wa.visaApprovedMessage(app.applicationId, app.applicantName, app.applicantPhone, app.visaId?.country || 'visa');
+      if (whatsappEnabled) {
+        whatsappLink = wa.visaApprovedMessage(app.applicationId, app.applicantName, app.applicantPhone, app.visaId?.country || 'visa');
+      }
     } else if (oldStatus !== status) {
       // Every other status change also gets a one-click WhatsApp deep link
-      // so the admin can notify the applicant without typing the message.
-      whatsappLink = wa.statusUpdateToApplicantMessage(
-        app.applicationId, app.applicantName, app.applicantPhone, status, app.visaId?.country || 'visa',
-      );
+      // (when enabled) so the admin can notify the applicant without typing
+      // the message.
+      if (whatsappEnabled) {
+        whatsappLink = wa.statusUpdateToApplicantMessage(
+          app.applicationId, app.applicantName, app.applicantPhone, status, app.visaId?.country || 'visa',
+        );
+      }
       // Rejection is the other transactional outcome that also gets an
       // automatic email (not just a WhatsApp link the admin has to send
       // manually) — same reasoning as the approval email above.

@@ -338,7 +338,7 @@ router.get('/settings', protect, authorize('admin'), async (req, res) => {
 // ── PUT /api/admin/settings ─────────────────────────────
 router.put('/settings', protect, authorize('admin'), async (req, res) => {
   try {
-    const { serviceFee, serviceFeeLabel, serviceFeeEnabled } = req.body;
+    const { serviceFee, serviceFeeLabel, serviceFeeEnabled, whatsappNotificationsEnabled } = req.body;
     let settings = await Settings.findOne();
     if (!settings) {
       settings = new Settings();
@@ -346,6 +346,7 @@ router.put('/settings', protect, authorize('admin'), async (req, res) => {
     if (serviceFee !== undefined) settings.serviceFee = serviceFee;
     if (serviceFeeLabel !== undefined) settings.serviceFeeLabel = serviceFeeLabel;
     if (serviceFeeEnabled !== undefined) settings.serviceFeeEnabled = serviceFeeEnabled;
+    if (whatsappNotificationsEnabled !== undefined) settings.whatsappNotificationsEnabled = whatsappNotificationsEnabled;
     await settings.save();
     res.json({ success: true, data: settings, message: 'Settings updated successfully.' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

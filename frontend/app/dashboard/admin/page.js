@@ -1344,6 +1344,19 @@ export default function AdminDashboard() {
                   className="w-4 h-4 accent-primary" />
                 <label htmlFor="feeEnabled" className="text-sm font-semibold text-gray-700">Enable Service Fee</label>
               </div>
+
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+                  <input type="checkbox" id="waEnabled" checked={settings.whatsappNotificationsEnabled !== false}
+                    onChange={e => setSettings({...settings, whatsappNotificationsEnabled: e.target.checked})}
+                    className="w-4 h-4 accent-primary" />
+                  <div>
+                    <label htmlFor="waEnabled" className="text-sm font-semibold text-gray-700 block">Send Status Updates via WhatsApp</label>
+                    <p className="text-xs text-gray-500 mt-0.5">On — status changes open a WhatsApp tab to notify the applicant (email always sends either way). Off — email only, no popup.</p>
+                  </div>
+                </div>
+              </div>
+
               <button onClick={() => saveSettings(settings)} disabled={saving}
                 className="btn-primary w-full justify-center disabled:opacity-60">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
